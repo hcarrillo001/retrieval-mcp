@@ -10,236 +10,235 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <style>
   :root{
-    --ink:#1A1A1E;--muted:#8A8F98;--line:#EAEAEC;--paper:#F7F7F8;--card:#FFF;--soft:#F2F2F4;
-    --pass:#15924F;--pass-soft:rgba(21,146,79,.10);--fail:#D5453B;--fail-soft:rgba(213,69,59,.10);
-    --m1:#1E40AF;--m2:#2563EB;--m3:#3B82F6;--m4:#60A5FA;
+    --ink:#1A1A1E;--muted:#6B7280;--line:#E6E7EA;--paper:#F7F8FA;--card:#FFFFFF;--soft:#F3F4F6;
+    --blue:#2563EB;--blue2:#1E40AF;--blue3:#60A5FA;
+    --pass:#15924F;--pass-soft:#E7F4EC;--fail:#D5453B;--fail-soft:#FBEAEA;
     --mono:"JetBrains Mono",ui-monospace,monospace;--ui:"Inter",system-ui,sans-serif;--display:"Space Grotesk",sans-serif;
   }
-  *{box-sizing:border-box;} body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--ui);font-size:14px;line-height:1.5;}
-  .top{display:flex;align-items:center;justify-content:space-between;padding:14px 24px;background:var(--card);border-bottom:1px solid var(--line);}
-  .brand{display:flex;align-items:center;gap:10px;}
-  .brand svg{height:26px;width:26px;color:var(--ink);}
-  .wordmark{font-family:var(--display);font-weight:700;font-size:20px;letter-spacing:-.02em;color:var(--muted);}
-  .wordmark .e{color:var(--ink);}
-  .src{font-family:var(--mono);font-size:11.5px;color:var(--muted);display:flex;align-items:center;gap:7px;}
-  .src .dot{width:7px;height:7px;border-radius:50%;background:var(--pass);}
-  .wrap{max-width:1180px;margin:0 auto;padding:22px 24px 70px;}
-  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px;}
-  .kpi{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:15px 16px;}
-  .kpi .lab{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);}
-  .kpi .num{font-family:var(--display);font-weight:700;font-size:28px;line-height:1.15;margin-top:8px;}
-  .kpi .num small{font-size:13px;color:var(--muted);font-family:var(--ui);font-weight:500;}
-  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px;}
-  .card{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:16px 18px;}
-  .card h3{margin:0 0 12px;font-size:14px;display:flex;justify-content:space-between;align-items:center;}
-  .card h3 .mono{font-family:var(--mono);font-size:10.5px;color:var(--muted);font-weight:400;}
-  table{width:100%;border-collapse:collapse;}
-  th{text-align:left;font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:500;padding:8px;border-bottom:1px solid var(--line);}
-  td{padding:9px 8px;border-bottom:1px solid var(--line);font-size:13px;}
-  tr:last-child td{border-bottom:0;}
-  .mono{font-family:var(--mono);} .muted{color:var(--muted);} .score{font-family:var(--mono);font-weight:700;}
-  .sw{width:9px;height:9px;border-radius:3px;display:inline-block;margin-right:7px;vertical-align:middle;}
-  .chip{font-family:var(--mono);font-size:10.5px;font-weight:700;padding:3px 8px;border-radius:999px;}
-  .chip--pass{background:var(--pass-soft);color:var(--pass);} .chip--fail{background:var(--fail-soft);color:var(--fail);}
-  canvas{max-height:210px;}
-  .empty{color:var(--muted);font-family:var(--mono);font-size:12px;padding:20px 0;}
-  @media(max-width:820px){.kpis{grid-template-columns:1fr 1fr;}.grid2{grid-template-columns:1fr;}}
-  .chatcard{border:1px solid var(--line);border-radius:12px;background:var(--card);margin-bottom:16px;overflow:hidden;}
-  .chatcard .hd{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--line);}
-  .chatcard .hd .t{font-weight:600;font-size:14px;}
-  .chatcard .hd .s{font-family:var(--mono);font-size:10.5px;color:var(--muted);}
-  .chatlog{max-height:320px;overflow-y:auto;padding:14px 16px;display:flex;flex-direction:column;gap:10px;}
-  .cmsg{max-width:88%;padding:9px 12px;border-radius:12px;font-size:13.5px;line-height:1.5;}
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--ui);font-size:14px;line-height:1.5;}
+  .app{height:100vh;padding:14px;}
+  .frame{height:100%;display:grid;grid-template-columns:60px 1fr 248px;background:var(--line);gap:1px;border:0.5px solid var(--line);border-radius:14px;overflow:hidden;}
+
+  /* left rail */
+  .rail{background:var(--card);display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 0;}
+  .logo{width:34px;height:34px;border-radius:9px;background:var(--blue);color:#fff;display:flex;align-items:center;justify-content:center;margin-bottom:12px;}
+  .logo svg{width:19px;height:19px;}
+  .nav{width:40px;height:40px;border-radius:9px;display:flex;align-items:center;justify-content:center;color:var(--muted);cursor:pointer;border:0;background:transparent;}
+  .nav:hover{background:var(--soft);color:var(--ink);}
+  .nav.active{background:var(--soft);color:var(--ink);}
+  .nav svg{width:19px;height:19px;}
+
+  /* center */
+  .main{background:var(--card);display:flex;flex-direction:column;min-width:0;}
+  .mhd{padding:13px 18px;border-bottom:0.5px solid var(--line);display:flex;align-items:center;justify-content:space-between;}
+  .mhd .t{font-weight:600;font-size:15px;}
+  .mhd .s{font-family:var(--mono);font-size:10.5px;color:var(--muted);display:flex;align-items:center;gap:7px;}
+  .mhd .dot{width:7px;height:7px;border-radius:50%;background:var(--pass);}
+  .view{flex:1;min-height:0;overflow-y:auto;}
+
+  /* chat */
+  .chatlog{padding:18px;display:flex;flex-direction:column;gap:11px;}
+  .cmsg{max-width:80%;padding:9px 13px;border-radius:13px;font-size:13.5px;line-height:1.55;}
   .cmsg.u{align-self:flex-end;background:var(--ink);color:#fff;border-bottom-right-radius:4px;white-space:pre-wrap;}
-  .cmsg.a{align-self:flex-start;background:var(--soft);border-bottom-left-radius:4px;}
-  .cmsg.a img{max-width:100%;border-radius:8px;margin-top:8px;border:1px solid var(--line);display:block;}
+  .cmsg.a{align-self:flex-start;background:var(--soft);border-bottom-left-radius:4px;width:100%;max-width:92%;}
+  .cmsg.a img{max-width:100%;border-radius:9px;margin-top:9px;border:0.5px solid var(--line);display:block;}
   .cmsg .tool{font-family:var(--mono);font-size:10.5px;color:var(--muted);margin:3px 0;}
-  .chatin{display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--line);}
-  .chatin input{flex:1;border:1px solid var(--line);border-radius:9px;padding:9px 12px;font-family:var(--ui);font-size:13.5px;outline:none;}
-  .chatin input:focus{border-color:var(--ink);}
-  .chatin button{font-family:var(--mono);font-size:13px;border:0;border-radius:9px;padding:9px 16px;background:var(--ink);color:#fff;cursor:pointer;}
-  .chatin button:disabled{opacity:.5;cursor:default;}
-  .chatnote{padding:10px 16px;font-family:var(--mono);font-size:11px;color:var(--muted);background:var(--soft);}
+  .srow{display:flex;align-items:center;gap:9px;margin:6px 0;}
+  .srow .nm{font-family:var(--mono);font-size:12px;width:130px;}
+  .track{flex:1;height:8px;border-radius:99px;background:#E4E6EB;overflow:hidden;}
+  .fill{height:100%;border-radius:99px;background:var(--pass);display:block;}
+  .fill.bad{background:var(--fail);}
+  .srow .v{font-family:var(--mono);font-size:12px;font-weight:700;width:30px;text-align:right;}
+  .pill{font-family:var(--mono);font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;background:var(--pass-soft);color:var(--pass);}
+  .pill.bad{background:var(--fail-soft);color:var(--fail);}
+  .cin{padding:13px 16px;border-top:0.5px solid var(--line);display:flex;gap:8px;}
+  .cin input{flex:1;border:0.5px solid var(--line);border-radius:9px;padding:10px 13px;font-family:var(--ui);font-size:13.5px;outline:none;background:var(--card);color:var(--ink);}
+  .cin input:focus{border-color:var(--blue);}
+  .cin button{width:38px;border:0;border-radius:9px;background:var(--blue);color:#fff;cursor:pointer;font-size:16px;}
+  .cin button:disabled{opacity:.5;cursor:default;}
+  .cnote{padding:9px 16px;font-family:var(--mono);font-size:11px;color:var(--muted);background:var(--soft);}
+
+  /* dashboard view */
+  .dash{padding:18px;}
+  .dash h3{font-size:13px;margin:0 0 11px;color:var(--ink);display:flex;justify-content:space-between;align-items:center;}
+  .dash h3 .m{font-family:var(--mono);font-size:10px;color:var(--muted);font-weight:400;}
+  .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:11px;margin-bottom:16px;}
+  .kpi{background:var(--soft);border-radius:9px;padding:13px 14px;}
+  .kpi .lab{font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);}
+  .kpi .num{font-family:var(--display);font-weight:700;font-size:24px;margin-top:6px;}
+  .card{border:0.5px solid var(--line);border-radius:11px;padding:14px 16px;margin-bottom:14px;}
+  canvas{max-height:200px;}
+  table{width:100%;border-collapse:collapse;}
+  th{text-align:left;font-family:var(--mono);font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);font-weight:500;padding:7px 8px;border-bottom:0.5px solid var(--line);}
+  td{padding:8px;border-bottom:0.5px solid var(--line);font-size:12.5px;}
+  tr:last-child td{border-bottom:0;}
+  .mono{font-family:var(--mono);}.sw{width:9px;height:9px;border-radius:3px;display:inline-block;margin-right:7px;vertical-align:middle;}
+  .chip{font-family:var(--mono);font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;}
+  .chip.pass{background:var(--pass-soft);color:var(--pass);}.chip.fail{background:var(--fail-soft);color:var(--fail);}
+
+  /* right metrics panel */
+  .side{background:var(--card);padding:15px;display:flex;flex-direction:column;gap:11px;overflow-y:auto;}
+  .side .h{font-family:var(--mono);font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;}
+  .stat{background:var(--soft);border-radius:9px;padding:11px 12px;}
+  .stat .l{font-size:11px;color:var(--muted);}
+  .stat .n{font-family:var(--display);font-weight:700;font-size:22px;margin-top:3px;}
+  .hide{display:none;}
+  @media(max-width:780px){.frame{grid-template-columns:52px 1fr;}.side{display:none;}}
 </style>
 </head>
 <body>
-<header class="top">
-  <div class="brand">
-    <svg viewBox="0 0 32 32" fill="none"><circle cx="13.5" cy="13.5" r="9" stroke="currentColor" stroke-width="2.4"/><path d="M20.5 20.5L27 27" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M9.5 13.8l2.8 2.8 5-5.4" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    <span class="wordmark">Retri<span class="e">Eval</span></span>
-  </div>
-  <span class="src" id="src"><span class="dot"></span><span id="srcText">loading…</span></span>
-</header>
+<div class="app"><div class="frame">
 
-<div class="wrap">
-  <div class="chatcard">
-    <div class="hd"><span class="t">Ask RetriEval</span><span class="s" id="chatState">chat + metrics, one place</span></div>
-    <div class="chatlog" id="chatlog">
-      <div class="cmsg a">Ask me to run an eval, author a metric, or plot a trend. Try: "run faithfulness + answer_relevancy on my golden set", or "show the faithfulness trend".</div>
+  <div class="rail">
+    <div class="logo"><svg viewBox="0 0 32 32" fill="none"><circle cx="13.5" cy="13.5" r="9" stroke="currentColor" stroke-width="2.6"/><path d="M20.5 20.5L27 27" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/><path d="M9.5 13.8l2.8 2.8 5-5.4" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    <button class="nav active" id="navChat" title="Chat"><svg viewBox="0 0 24 24" fill="none"><path d="M4 5h16v11H8l-4 3z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></button>
+    <button class="nav" id="navDash" title="Dashboard"><svg viewBox="0 0 24 24" fill="none"><path d="M4 13h6v7H4zM14 4h6v16h-6zM4 4h6v5H4z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></button>
+  </div>
+
+  <div class="main">
+    <div class="mhd">
+      <span class="t" id="mainTitle">Ask RetriEval</span>
+      <span class="s"><span class="dot" id="dot"></span><span id="state">loading…</span></span>
     </div>
-    <div class="chatin">
+
+    <div class="view" id="viewChat">
+      <div class="chatlog" id="chatlog">
+        <div class="cmsg a">Ask me to run an eval, author a metric, or plot a trend. Try: "run faithfulness + answer_relevancy on my golden set", or "show the faithfulness trend".</div>
+      </div>
+    </div>
+    <div class="cin" id="chatInputBar">
       <input id="chatbox" placeholder="Score an answer, run a metric, plot a trend…" autocomplete="off"/>
-      <button id="chatsend">Send</button>
+      <button id="chatsend">&#8593;</button>
     </div>
-    <div class="chatnote" id="chatnote" style="display:none"></div>
+    <div class="cnote hide" id="cnote"></div>
+
+    <div class="view dash hide" id="viewDash">
+      <div class="kpis" id="kpis"></div>
+      <div class="card"><h3>Faithfulness over time <span class="m">by judge model</span></h3><canvas id="trend"></canvas></div>
+      <div class="card"><h3>Model comparison <span class="m">avg faithfulness</span></h3><canvas id="models"></canvas></div>
+      <div class="card"><h3>Models we've run <span class="m">generator · avg</span></h3><div id="leaderboard"></div></div>
+      <div class="card"><h3>Run history <span class="m">most recent</span></h3><div id="history"></div></div>
+    </div>
   </div>
-  <div class="kpis" id="kpis"></div>
-  <div class="grid2">
-    <div class="card"><h3>Faithfulness over time <span class="mono">by judge model</span></h3><canvas id="trend"></canvas></div>
-    <div class="card"><h3>Model comparison <span class="mono">avg faithfulness</span></h3><canvas id="models"></canvas></div>
+
+  <div class="side">
+    <span class="h">Latest run</span>
+    <div class="stat"><div class="l">Avg faithfulness</div><div class="n" id="sFaith">—</div></div>
+    <div class="stat"><div class="l">Pass rate</div><div class="n" id="sPass" style="color:var(--pass)">—</div></div>
+    <span class="h" style="margin-top:4px">Faithfulness trend</span>
+    <svg id="spark" viewBox="0 0 210 78" style="width:100%"></svg>
+    <span class="h" style="margin-top:4px">Total runs</span>
+    <div class="stat"><div class="n" id="sRuns" style="font-size:26px">—</div></div>
   </div>
-  <div class="card" style="margin-bottom:16px"><h3>Models we've run <span class="mono">generator · avg over runs</span></h3><div id="leaderboard"></div></div>
-  <div class="card"><h3>Run history <span class="mono">most recent</span></h3><div id="history"></div></div>
-  <p class="mono muted" style="margin-top:24px;font-size:12px">// retrieval-mcp.com · reads run history from Supabase via /api/runs</p>
-</div>
+
+</div></div>
 
 <script>
-const PALETTE = {m1:"#1E40AF", m2:"#2563EB", m3:"#3B82F6", m4:"#60A5FA"};
-const COLORS = ["#2563EB","#1E40AF","#60A5FA","#3B82F6","#93C5FD"];
-
-// fallback sample data so the page renders before Supabase is wired
-const SAMPLE = [
-  {run_id:"r-6",timestamp:"2026-06-21T10:00:00",label:"v6",golden_set:"rag",generator_model:"GPT-4o",judge_model:"Claude Sonnet 4.6",aggregate:{faithfulness:{mean_score:0.91,pass_rate:0.92,n:12},answer_relevancy:{mean_score:0.94,pass_rate:0.95,n:12}}},
-  {run_id:"r-5",timestamp:"2026-06-20T10:00:00",label:"v5",golden_set:"rag",generator_model:"GPT-4o",judge_model:"Claude Sonnet 4.6",aggregate:{faithfulness:{mean_score:0.88,pass_rate:0.88,n:12},answer_relevancy:{mean_score:0.92,pass_rate:0.92,n:12}}},
-  {run_id:"r-4",timestamp:"2026-06-19T10:00:00",label:"v4",golden_set:"rag",generator_model:"Llama 3.3 70B",judge_model:"DeepSeek-R1 70B",aggregate:{faithfulness:{mean_score:0.66,pass_rate:0.61,n:12},answer_relevancy:{mean_score:0.85,pass_rate:0.80,n:12}}},
-  {run_id:"r-3",timestamp:"2026-06-18T10:00:00",label:"v3",golden_set:"rag",generator_model:"GPT-4o",judge_model:"Claude Sonnet 4.6",aggregate:{faithfulness:{mean_score:0.86,pass_rate:0.84,n:12},answer_relevancy:{mean_score:0.91,pass_rate:0.90,n:12}}},
-  {run_id:"r-2",timestamp:"2026-06-17T10:00:00",label:"v2",golden_set:"rag",generator_model:"Claude Sonnet 4.6",judge_model:"Claude Sonnet 4.6",aggregate:{faithfulness:{mean_score:0.84,pass_rate:0.83,n:12},answer_relevancy:{mean_score:0.90,pass_rate:0.88,n:12}}},
-  {run_id:"r-1",timestamp:"2026-06-16T10:00:00",label:"v1",golden_set:"rag",generator_model:"Llama 3.3 70B",judge_model:"DeepSeek-R1 70B",aggregate:{faithfulness:{mean_score:0.62,pass_rate:0.58,n:12},answer_relevancy:{mean_score:0.83,pass_rate:0.78,n:12}}}
+const COLORS=["#2563EB","#1E40AF","#60A5FA","#3B82F6","#93C5FD"];
+const SAMPLE=[
+ {run_id:"r-6",timestamp:"2026-06-21",label:"v6",golden_set:"rag",generator_model:"GPT-4o",judge_model:"Claude Sonnet 4.6",aggregate:{faithfulness:{mean_score:0.91,pass_rate:0.92,n:12},answer_relevancy:{mean_score:0.94,pass_rate:0.95,n:12}}},
+ {run_id:"r-5",timestamp:"2026-06-20",label:"v5",golden_set:"rag",generator_model:"GPT-4o",judge_model:"Claude Sonnet 4.6",aggregate:{faithfulness:{mean_score:0.88,pass_rate:0.88,n:12},answer_relevancy:{mean_score:0.92,pass_rate:0.92,n:12}}},
+ {run_id:"r-4",timestamp:"2026-06-19",label:"v4",golden_set:"rag",generator_model:"Llama 3.3 70B",judge_model:"DeepSeek-R1 70B",aggregate:{faithfulness:{mean_score:0.66,pass_rate:0.61,n:12},answer_relevancy:{mean_score:0.85,pass_rate:0.80,n:12}}},
+ {run_id:"r-3",timestamp:"2026-06-18",label:"v3",golden_set:"rag",generator_model:"GPT-4o",judge_model:"Claude Sonnet 4.6",aggregate:{faithfulness:{mean_score:0.86,pass_rate:0.84,n:12},answer_relevancy:{mean_score:0.91,pass_rate:0.90,n:12}}},
+ {run_id:"r-2",timestamp:"2026-06-17",label:"v2",golden_set:"rag",generator_model:"Claude Sonnet 4.6",judge_model:"Claude Sonnet 4.6",aggregate:{faithfulness:{mean_score:0.84,pass_rate:0.83,n:12},answer_relevancy:{mean_score:0.90,pass_rate:0.88,n:12}}},
+ {run_id:"r-1",timestamp:"2026-06-16",label:"v1",golden_set:"rag",generator_model:"Llama 3.3 70B",judge_model:"DeepSeek-R1 70B",aggregate:{faithfulness:{mean_score:0.62,pass_rate:0.58,n:12},answer_relevancy:{mean_score:0.83,pass_rate:0.78,n:12}}}
 ];
-
-const fm = (n) => (n==null ? "—" : Number(n).toFixed(2));
-const mean = (a) => a.length ? a.reduce((x,y)=>x+y,0)/a.length : 0;
+const fm=n=>(n==null?"—":Number(n).toFixed(2));
+const mean=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:0;
+const faith=r=>r.aggregate&&r.aggregate.faithfulness&&r.aggregate.faithfulness.mean_score;
 
 async function load(){
-  let runs, live=false;
-  try{
-    const r = await fetch("/api/runs?limit=200");
-    if(r.ok){ const j = await r.json(); if(Array.isArray(j) && j.length){ runs=j; live=true; } }
-  }catch(e){}
-  if(!runs){ runs = SAMPLE; }
-  document.getElementById("srcText").textContent = live ? "live · Supabase" : "sample data — wire SUPABASE_URL to go live";
-  if(!live) document.querySelector("#src .dot").style.background = "#B08A4A";
-  render(runs.slice().sort((a,b)=> a.timestamp < b.timestamp ? -1 : 1));
+  let runs,live=false;
+  try{const r=await fetch("/api/runs?limit=200");if(r.ok){const j=await r.json();if(Array.isArray(j)&&j.length){runs=j;live=true;}}}catch(e){}
+  if(!runs)runs=SAMPLE;
+  document.getElementById("state").textContent=live?"live · Supabase":"sample data";
+  if(!live)document.getElementById("dot").style.background="#B08A4A";
+  runs=runs.slice().sort((a,b)=>a.timestamp<b.timestamp?-1:1);
+  renderSide(runs);renderDash(runs);
 }
 
-function render(runs){
-  const faith = (r)=> r.aggregate?.faithfulness?.mean_score;
-  const latest = runs[runs.length-1] || {};
-  // KPIs
-  const byGen = {};
-  runs.forEach(r=>{ const g=r.generator_model||"unknown"; (byGen[g]=byGen[g]||[]).push(faith(r)); });
-  const topModel = Object.entries(byGen).map(([k,v])=>[k,mean(v.filter(Boolean))]).sort((a,b)=>b[1]-a[1])[0]||["—",0];
-  const avgF = mean(runs.map(faith).filter(Boolean));
-  document.getElementById("kpis").innerHTML = `
-    <div class="kpi"><div class="lab">Total runs</div><div class="num">${runs.length}</div></div>
-    <div class="kpi"><div class="lab">Top model</div><div class="num" style="font-size:17px;padding-top:7px">${topModel[0]}</div></div>
-    <div class="kpi"><div class="lab">Avg faithfulness</div><div class="num">${fm(avgF)} <small>/ 1.0</small></div></div>
-    <div class="kpi"><div class="lab">Latest run</div><div class="num" style="font-size:17px;padding-top:7px">${latest.label||latest.run_id||"—"}</div></div>`;
-
-  // trend by judge model
-  const judges = [...new Set(runs.map(r=>r.judge_model||"judge"))];
-  const labels = runs.map(r=> r.label || (r.run_id||"").slice(0,8));
-  const dsets = judges.map((j,i)=>({
-    label:j, borderColor:COLORS[i%COLORS.length], backgroundColor:COLORS[i%COLORS.length],
-    tension:.3, spanGaps:true,
-    data: runs.map(r => (r.judge_model||"judge")===j ? faith(r) : null)
-  }));
-  new Chart(document.getElementById("trend"), {
-    type:"line",
-    data:{ labels, datasets:dsets },
-    options:{ plugins:{legend:{labels:{font:{size:10}}}}, scales:{ y:{min:0,max:1,ticks:{font:{size:10}}}, x:{ticks:{font:{size:10}}} },
-      elements:{point:{radius:3}} }
-  });
-
-  // model comparison (avg faithfulness by generator)
-  const gens = Object.keys(byGen);
-  new Chart(document.getElementById("models"), {
-    type:"bar",
-    data:{ labels:gens, datasets:[{ label:"avg faithfulness",
-      data:gens.map(g=>mean(byGen[g].filter(Boolean))),
-      backgroundColor:gens.map((g,i)=>COLORS[i%COLORS.length]) }] },
-    options:{ plugins:{legend:{display:false}}, scales:{ y:{min:0,max:1,ticks:{font:{size:10}}}, x:{ticks:{font:{size:10}}} } }
-  });
-
-  // leaderboard
-  const lb = gens.map(g=>{
-    const rs = runs.filter(r=>(r.generator_model||"unknown")===g);
-    const f = mean(rs.map(faith).filter(Boolean));
-    const ar = mean(rs.map(r=>r.aggregate?.answer_relevancy?.mean_score).filter(Boolean));
-    const pr = mean(rs.map(r=>r.aggregate?.faithfulness?.pass_rate).filter(Boolean));
-    return {g, f, ar, pr, n:rs.length};
-  }).sort((a,b)=>b.f-a.f);
-  document.getElementById("leaderboard").innerHTML =
-    `<table><thead><tr><th>Model</th><th>Faithfulness</th><th>Answer rel.</th><th>Pass rate</th><th>Runs</th></tr></thead><tbody>`+
-    lb.map((m,i)=>`<tr><td class="mono"><span class="sw" style="background:${COLORS[i%COLORS.length]}"></span>${m.g}</td>
-      <td class="score">${fm(m.f)}</td><td class="mono">${fm(m.ar)}</td>
-      <td><span class="chip ${m.pr>=0.7?'chip--pass':'chip--fail'}">${Math.round(m.pr*100)}%</span></td>
-      <td class="mono">${m.n}</td></tr>`).join("")+`</tbody></table>`;
-
-  // history (most recent first)
-  const recent = runs.slice().reverse();
-  document.getElementById("history").innerHTML =
-    `<table><thead><tr><th>Run</th><th>When</th><th>Golden set</th><th>Generator</th><th>Judge</th><th>Faithfulness</th></tr></thead><tbody>`+
-    recent.map(r=>`<tr data-run="${r.run_id||''}"><td class="mono">${r.label||(r.run_id||'').slice(0,8)}</td>
-      <td class="muted">${(r.timestamp||'').slice(0,10)}</td><td class="mono">${r.golden_set||''}</td>
-      <td class="mono">${r.generator_model||'—'}</td><td class="mono">${r.judge_model||'—'}</td>
-      <td><span class="chip ${faith(r)>=0.7?'chip--pass':'chip--fail'}">${fm(faith(r))}</span></td></tr>`).join("")+
-    `</tbody></table>`;
-
-  // deep link: /?run=<run_id> (used by the Jira comment) — highlight + scroll to it
-  const want = new URLSearchParams(location.search).get("run");
-  if (want) {
-    const row = document.querySelector(`#history tr[data-run="${want}"]`);
-    if (row) {
-      row.style.outline = "2px solid var(--ink)";
-      row.style.background = "var(--soft)";
-      row.scrollIntoView({ behavior: "smooth", block: "center" });
-    }
-  }
+function renderSide(runs){
+  const avgF=mean(runs.map(faith).filter(Boolean));
+  const pr=mean(runs.map(r=>r.aggregate&&r.aggregate.faithfulness&&r.aggregate.faithfulness.pass_rate).filter(v=>v!=null));
+  document.getElementById("sFaith").textContent=fm(avgF);
+  document.getElementById("sPass").textContent=Math.round(pr*100)+"%";
+  document.getElementById("sRuns").textContent=runs.length;
+  const last=runs.slice(-6),vals=last.map(faith);
+  const W=210,H=78,pad=8,n=vals.length;
+  const x=i=>pad+(n<=1?0:i*(W-2*pad)/(n-1));
+  const y=v=>8+(1-v)*(H-16);
+  let line="",pts="";
+  vals.forEach((v,i)=>{line+=(i?" ":"")+x(i).toFixed(1)+","+y(v).toFixed(1);});
+  vals.forEach((v,i)=>{const c=v>=0.7?"#15924F":"#D5453B";pts+=`<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="2.8" fill="${c}"/>`;});
+  document.getElementById("spark").innerHTML=
+    `<line x1="${pad}" y1="${y(0.7).toFixed(1)}" x2="${W-pad}" y2="${y(0.7).toFixed(1)}" stroke="#9CA3AF" stroke-width="1" stroke-dasharray="3 3"/>`+
+    `<polyline points="${line}" fill="none" stroke="#2563EB" stroke-width="2"/>`+pts;
 }
-load();
-</script>
-<script>
+
+let trendChart,modelChart;
+function renderDash(runs){
+  const byGen={};runs.forEach(r=>{const g=r.generator_model||"unknown";(byGen[g]=byGen[g]||[]).push(faith(r));});
+  const top=Object.entries(byGen).map(([k,v])=>[k,mean(v.filter(Boolean))]).sort((a,b)=>b[1]-a[1])[0]||["—",0];
+  const avgF=mean(runs.map(faith).filter(Boolean));
+  document.getElementById("kpis").innerHTML=
+    `<div class="kpi"><div class="lab">Runs</div><div class="num">${runs.length}</div></div>`+
+    `<div class="kpi"><div class="lab">Top model</div><div class="num" style="font-size:15px;padding-top:6px">${top[0]}</div></div>`+
+    `<div class="kpi"><div class="lab">Avg faith.</div><div class="num">${fm(avgF)}</div></div>`;
+  const judges=[...new Set(runs.map(r=>r.judge_model||"judge"))];
+  const labels=runs.map(r=>r.label||(r.run_id||"").slice(0,8));
+  if(trendChart)trendChart.destroy();
+  trendChart=new Chart(document.getElementById("trend"),{type:"line",
+    data:{labels,datasets:judges.map((j,i)=>({label:j,borderColor:COLORS[i%COLORS.length],backgroundColor:COLORS[i%COLORS.length],tension:.3,spanGaps:true,data:runs.map(r=>(r.judge_model||"judge")===j?faith(r):null)}))},
+    options:{plugins:{legend:{labels:{font:{size:10}}}},scales:{y:{min:0,max:1,ticks:{font:{size:10}}},x:{ticks:{font:{size:10}}}},elements:{point:{radius:3}}}});
+  const gens=Object.keys(byGen);
+  if(modelChart)modelChart.destroy();
+  modelChart=new Chart(document.getElementById("models"),{type:"bar",
+    data:{labels:gens,datasets:[{label:"avg faithfulness",data:gens.map(g=>mean(byGen[g].filter(Boolean))),backgroundColor:gens.map((g,i)=>COLORS[i%COLORS.length])}]},
+    options:{plugins:{legend:{display:false}},scales:{y:{min:0,max:1,ticks:{font:{size:10}}},x:{ticks:{font:{size:10}}}}}});
+  const lb=gens.map(g=>{const rs=runs.filter(r=>(r.generator_model||"unknown")===g);return{g,f:mean(rs.map(faith).filter(Boolean)),pr:mean(rs.map(r=>r.aggregate&&r.aggregate.faithfulness&&r.aggregate.faithfulness.pass_rate).filter(v=>v!=null)),n:rs.length};}).sort((a,b)=>b.f-a.f);
+  document.getElementById("leaderboard").innerHTML=`<table><thead><tr><th>Model</th><th>Faith.</th><th>Pass</th><th>Runs</th></tr></thead><tbody>`+
+    lb.map((m,i)=>`<tr><td class="mono"><span class="sw" style="background:${COLORS[i%COLORS.length]}"></span>${m.g}</td><td class="mono" style="font-weight:700">${fm(m.f)}</td><td><span class="chip ${m.pr>=0.7?'pass':'fail'}">${Math.round(m.pr*100)}%</span></td><td class="mono">${m.n}</td></tr>`).join("")+`</tbody></table>`;
+  const recent=runs.slice().reverse();
+  document.getElementById("history").innerHTML=`<table><thead><tr><th>Run</th><th>When</th><th>Generator</th><th>Faith.</th></tr></thead><tbody>`+
+    recent.map(r=>`<tr><td class="mono">${r.label||(r.run_id||'').slice(0,8)}</td><td style="color:var(--muted)">${(r.timestamp||'').slice(0,10)}</td><td class="mono">${r.generator_model||'—'}</td><td><span class="chip ${faith(r)>=0.7?'pass':'fail'}">${fm(faith(r))}</span></td></tr>`).join("")+`</tbody></table>`;
+}
+
+/* nav switching */
+const navChat=document.getElementById("navChat"),navDash=document.getElementById("navDash");
+function show(view){
+  const chat=view==="chat";
+  document.getElementById("viewChat").classList.toggle("hide",!chat);
+  document.getElementById("chatInputBar").classList.toggle("hide",!chat);
+  document.getElementById("viewDash").classList.toggle("hide",chat);
+  navChat.classList.toggle("active",chat);navDash.classList.toggle("active",!chat);
+  document.getElementById("mainTitle").textContent=chat?"Ask RetriEval":"Dashboard";
+}
+navChat.onclick=()=>show("chat");navDash.onclick=()=>show("dash");
+
+/* chat */
 (function(){
-  const log=document.getElementById("chatlog"), box=document.getElementById("chatbox");
-  const send=document.getElementById("chatsend"), note=document.getElementById("chatnote");
-  const token=new URLSearchParams(location.search).get("key");
-  const history=[];
-  function esc(s){return (s||"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));}
+  const log=document.getElementById("chatlog"),box=document.getElementById("chatbox");
+  const send=document.getElementById("chatsend"),note=document.getElementById("cnote");
+  const token=new URLSearchParams(location.search).get("key");const history=[];
+  const esc=s=>(s||"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
   function add(role,html){const d=document.createElement("div");d.className="cmsg "+(role==="user"?"u":"a");d.innerHTML=html;log.appendChild(d);log.scrollTop=log.scrollHeight;return d;}
-  function renderBlocks(content){
-    let html=""; const imgs=[];
-    (function walk(blocks){ if(!Array.isArray(blocks)) return;
-      for(const b of blocks){
-        if(b.type==="text"&&b.text) html+="<div>"+esc(b.text).replace(/\n/g,"<br>")+"</div>";
-        else if(b.type==="mcp_tool_use"||b.type==="tool_use") html+="<div class='tool'>\u21B3 "+esc(b.name||"tool")+"</div>";
-        else if(b.type==="image"&&b.source&&b.source.data) imgs.push(b.source.data);
-        else if(b.content) walk(b.content);
-      }
-    })(content);
-    for(const d of imgs) html+="<img src='data:image/png;base64,"+d+"'/>";
-    return html||"<div class='tool'>(no content)</div>";
-  }
+  function blocks(content){let html="";const imgs=[];(function walk(b){if(!Array.isArray(b))return;for(const x of b){if(x.type==="text"&&x.text)html+="<div>"+esc(x.text).replace(/\n/g,"<br>")+"</div>";else if(x.type==="mcp_tool_use"||x.type==="tool_use")html+="<div class='tool'>\u21B3 "+esc(x.name||"tool")+"</div>";else if(x.type==="image"&&x.source&&x.source.data)imgs.push(x.source.data);else if(x.content)walk(x.content);}})(content);for(const d of imgs)html+="<img src='data:image/png;base64,"+d+"'/>";return html||"<div class='tool'>(no content)</div>";}
   async function ask(){
-    const text=box.value.trim(); if(!text) return;
-    box.value=""; add("user",esc(text)); history.push({role:"user",content:text});
-    send.disabled=true; const pending=add("assistant","<span class='tool'>thinking…</span>");
-    try{
-      const headers={"content-type":"application/json"}; if(token) headers["authorization"]="Bearer "+token;
-      const r=await fetch("/api/chat",{method:"POST",headers,body:JSON.stringify({messages:history})});
-      const data=await r.json();
-      if(!r.ok){ pending.innerHTML="<span class='tool'>"+esc(data.error||("error "+r.status))+"</span>";
-        if(r.status===503||r.status===401){ note.style.display="block"; note.textContent=data.error||"chat unavailable"; }
-        send.disabled=false; return; }
-      pending.innerHTML=renderBlocks(data.content);
-      const txt=(data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("\n");
-      history.push({role:"assistant",content:txt||"(chart/tool result shown above)"});
-    }catch(e){ pending.innerHTML="<span class='tool'>"+esc(String(e))+"</span>"; }
+    const text=box.value.trim();if(!text)return;box.value="";add("user",esc(text));history.push({role:"user",content:text});
+    send.disabled=true;const p=add("assistant","<span class='tool'>thinking…</span>");
+    try{const h={"content-type":"application/json"};if(token)h["authorization"]="Bearer "+token;
+      const r=await fetch("/api/chat",{method:"POST",headers:h,body:JSON.stringify({messages:history})});const data=await r.json();
+      if(!r.ok){p.innerHTML="<span class='tool'>"+esc(data.error||("error "+r.status))+"</span>";if(r.status===503||r.status===401){note.classList.remove("hide");note.textContent=data.error||"chat unavailable";}send.disabled=false;return;}
+      p.innerHTML=blocks(data.content);const txt=(data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("\n");history.push({role:"assistant",content:txt||"(chart shown above)"});
+    }catch(e){p.innerHTML="<span class='tool'>"+esc(String(e))+"</span>";}
     send.disabled=false;
   }
-  send.addEventListener("click",ask);
-  box.addEventListener("keydown",e=>{ if(e.key==="Enter") ask(); });
+  send.onclick=ask;box.addEventListener("keydown",e=>{if(e.key==="Enter")ask();});
 })();
+
+load();
 </script>
 </body>
 </html>
