@@ -1,0 +1,6 @@
+[
+  {"id": "q1", "question": "How long is a day on Venus?", "gold_answer": "About 243 Earth days.", "gold_passages": ["p1"]},
+  {"id": "q2", "question": "How tall is Olympus Mons?", "gold_answer": "About 22 kilometers.", "gold_passages": ["p3"]},
+  {"id": "q3", "question": "Which planet has the most confirmed moons?", "gold_answer": "Saturn, with 146 moons.", "gold_passages": ["p4"]},
+  {"id": "q4", "question": "What fraction of the solar system's mass does our star hold?", "gold_answer": "About 99.86 percent.", "gold_passages": ["p8"]}
+]

@@ -1,0 +1,11 @@
+[
+  {"id": "p1", "text": "Venus rotates once every 243 Earth days, the slowest rotation of any planet in the solar system."},
+  {"id": "p2", "text": "Venus orbits the Sun every 225 Earth days, so a Venusian day is longer than its year."},
+  {"id": "p3", "text": "Olympus Mons on Mars is the tallest volcano in the solar system, standing about 22 kilometers high."},
+  {"id": "p4", "text": "Saturn has 146 confirmed moons, the most of any planet."},
+  {"id": "p5", "text": "Jupiter has 95 confirmed moons and is the largest planet by mass and volume."},
+  {"id": "p6", "text": "Mercury is the smallest planet and the closest to the Sun."},
+  {"id": "p7", "text": "A light-year is the distance light travels in one year, roughly 9.46 trillion kilometers."},
+  {"id": "p8", "text": "The Sun contains about 99.86 percent of all the mass in the solar system."},
+  {"id": "p9", "text": "Neptune is the windiest planet, with winds reaching about 2,100 kilometers per hour."}
+]
