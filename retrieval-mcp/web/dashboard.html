@@ -10,9 +10,11 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <style>
   :root{
-    --ink:#1A1A1E;--muted:#6B7280;--line:#E6E7EA;--paper:#F7F8FA;--card:#FFFFFF;--soft:#F3F4F6;
-    --blue:#2563EB;--blue2:#1E40AF;--blue3:#60A5FA;
-    --pass:#15924F;--pass-soft:#E7F4EC;--fail:#D5453B;--fail-soft:#FBEAEA;
+    --ink:#18181B;--muted:#71717A;--faint:#A1A1AA;--line:#E4E4E7;--line2:#D4D4D8;--paper:#FAFAFA;--card:#FFFFFF;--soft:#F4F4F5;--soft2:#FAFAFA;
+    --blue:#2563EB;--blue2:#1D4ED8;--blue3:#93C5FD;--blue-soft:#EFF4FE;
+    --pass:#059669;--pass-soft:#ECFDF5;--pass-ink:#047857;
+    --fail:#E11D48;--fail-soft:#FFF1F3;--fail-ink:#BE123C;
+    --warn:#D97706;--warn-soft:#FFFBEB;--warn-ink:#B45309;
     --mono:"JetBrains Mono",ui-monospace,monospace;--ui:"Inter",system-ui,sans-serif;--display:"Space Grotesk",sans-serif;
   }
   *{box-sizing:border-box;}
@@ -63,34 +65,68 @@
   .cmsg .tool{font-family:var(--mono);font-size:10.5px;color:var(--muted);margin:3px 0;}
 
   /* eval result card (inline in chat) */
-  .evalcard{border:0.5px solid var(--line);border-radius:11px;overflow:hidden;margin-top:6px;background:var(--card);}
-  .evalcard .ehd{display:flex;align-items:center;gap:10px;padding:11px 13px;cursor:pointer;}
-  .evalcard .ehd:hover{background:var(--soft);}
+  .evalcard{border:0.5px solid var(--line);border-radius:14px;overflow:hidden;margin-top:8px;background:var(--card);}
+  .evalcard .ehd{display:flex;align-items:center;gap:11px;padding:13px 15px;border-bottom:0.5px solid var(--line);}
+  .evalcard .eicon{width:30px;height:30px;border-radius:9px;background:var(--blue-soft);color:var(--blue);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .evalcard .eicon svg{width:16px;height:16px;}
   .evalcard .etitle{flex:1;min-width:0;}
-  .evalcard .ename{font-family:var(--mono);font-size:12px;font-weight:600;}
-  .evalcard .esub{font-size:10.5px;color:var(--muted);margin-top:2px;}
-  .evalcard .everdict{font-family:var(--mono);font-size:11px;font-weight:700;padding:3px 9px;border-radius:7px;}
-  .everdict.allpass{background:var(--pass-soft);color:var(--pass);}
-  .everdict.somefail{background:var(--fail-soft);color:var(--fail);}
-  .evalcard .ecaret{color:var(--muted);font-size:11px;transition:transform .15s;}
-  .evalcard.open .ecaret{transform:rotate(90deg);}
-  .evalcard .ebody{display:none;border-top:0.5px solid var(--line);}
-  .evalcard.open .ebody{display:block;}
-  .emini{display:flex;gap:3px;padding:0 13px 11px;flex-wrap:wrap;}
-  .emini .hc{width:12px;height:12px;border-radius:3px;}
-  .ecase{padding:11px 13px;border-bottom:0.5px solid var(--line);}
+  .evalcard .ename{font-weight:600;font-size:13.5px;}
+  .evalcard .esub{font-size:11px;color:var(--faint);margin-top:2px;}
+  .evalcard .everdict{font-size:11.5px;font-weight:600;padding:4px 11px;border-radius:99px;}
+  .everdict.allpass{background:var(--pass-soft);color:var(--pass-ink);}
+  .everdict.somefail{background:var(--fail-soft);color:var(--fail-ink);}
+  /* metric meters */
+  .emeters{padding:13px 15px;display:flex;flex-direction:column;gap:11px;border-bottom:0.5px solid var(--line);}
+  .emeter .erow{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:5px;}
+  .emeter .emname{font-size:12px;color:var(--ink);font-weight:500;}
+  .emeter .emval{font-family:var(--display);font-size:17px;font-variant-numeric:tabular-nums;line-height:1;}
+  .emeter .emtrack{position:relative;height:7px;background:var(--soft);border-radius:99px;overflow:hidden;}
+  .emeter .emfill{position:absolute;left:0;top:0;bottom:0;border-radius:99px;}
+  .emeter .emthresh{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--faint);}
+  /* cases */
+  .ecase{border-bottom:0.5px solid var(--line);}
   .ecase:last-child{border-bottom:0;}
-  .ecase .eq{font-size:12.5px;font-weight:500;margin-bottom:7px;display:flex;gap:8px;align-items:baseline;}
-  .ecols{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
-  .ecol{background:var(--soft);border-radius:7px;padding:8px 9px;min-width:0;}
-  .ecol .l{font-family:var(--mono);font-size:9px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:4px;}
-  .ecol .v{font-size:11.5px;line-height:1.4;overflow-wrap:anywhere;}
-  .ecol.why{grid-column:1/-1;border:0.5px solid var(--line);background:transparent;}
-  .ecol.why.bad{border-color:var(--fail);background:var(--fail-soft);}
-  .ecol.why.good{border-color:var(--pass);background:var(--pass-soft);}
-  .esc{font-family:var(--mono);font-size:11px;font-weight:700;padding:2px 7px;border-radius:6px;}
-  .esc.good{background:var(--pass-soft);color:var(--pass);}
-  .esc.bad{background:var(--fail-soft);color:var(--fail);}
+  .ecase .ech{display:flex;align-items:center;gap:10px;padding:12px 15px;cursor:pointer;}
+  .ecase .ech:hover{background:var(--soft2);}
+  .ecase .eq{font-size:13px;font-weight:500;flex:1;min-width:0;}
+  .ecase .ecaret{color:var(--faint);font-size:11px;transition:transform .15s;flex-shrink:0;}
+  .ecase.open .ecaret{transform:rotate(90deg);}
+  .ecase .ebody{display:none;padding:0 15px 14px;}
+  .ecase.open .ebody{display:block;}
+  .ecols{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:10px;}
+  .ecol{background:var(--soft2);border:0.5px solid var(--line);border-radius:10px;padding:10px 11px;min-width:0;}
+  .ecol .l{display:flex;align-items:center;gap:5px;font-size:10px;letter-spacing:.04em;text-transform:uppercase;color:var(--faint);margin-bottom:6px;}
+  .ecol .l svg{width:13px;height:13px;}
+  .ecol .v{font-size:12.5px;line-height:1.5;overflow-wrap:anywhere;}
+  .mk{padding:0 3px;border-radius:3px;}
+  .mk.good{background:var(--pass-soft);color:var(--pass-ink);}
+  .mk.bad{background:var(--fail-soft);color:var(--fail-ink);}
+  /* per-metric explanation dropdown */
+  .expl{border:0.5px solid var(--line);border-radius:10px;overflow:hidden;margin-top:8px;}
+  .expl .xh{display:flex;align-items:center;gap:8px;padding:9px 11px;cursor:pointer;}
+  .expl .xh:hover{background:var(--soft2);}
+  .expl .xmname{font-size:11.5px;font-weight:500;flex:1;}
+  .expl .xcaret{color:var(--faint);font-size:10px;transition:transform .15s;}
+  .expl.open .xcaret{transform:rotate(90deg);}
+  .expl .xbody{display:none;padding:0 11px 11px;}
+  .expl.open .xbody{display:block;}
+  .expl .xwhy{font-size:12.5px;line-height:1.55;color:var(--ink);padding:8px 10px;border-radius:8px;}
+  .expl .xwhy.bad{background:var(--fail-soft);}
+  .expl .xwhy.good{background:var(--pass-soft);}
+  .xcalc{margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;}
+  .xchip{font-family:var(--mono);font-size:10.5px;padding:3px 8px;border-radius:6px;background:var(--soft);color:var(--muted);}
+  .xchip b{color:var(--ink);font-weight:700;}
+  .xchip.bad{background:var(--fail-soft);color:var(--fail-ink);}
+  .esc{font-family:var(--mono);font-size:11.5px;font-weight:700;padding:3px 9px;border-radius:7px;flex-shrink:0;}
+  .esc.good{background:var(--pass-soft);color:var(--pass-ink);}
+  .esc.bad{background:var(--fail-soft);color:var(--fail-ink);}
+  /* side panel per-metric */
+  .smetric{margin-bottom:11px;}
+  .smetric .sr{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:4px;}
+  .smetric .snm{font-size:12px;font-weight:500;}
+  .smetric .sv{font-family:var(--mono);font-size:12px;font-weight:700;font-variant-numeric:tabular-nums;}
+  .smetric .strack{height:6px;background:var(--soft);border-radius:99px;overflow:hidden;}
+  .smetric .sfill{height:100%;border-radius:99px;}
 
   /* collapsible section */
   .collap > .ch{display:flex;align-items:center;gap:8px;cursor:pointer;font-size:11px;font-family:var(--mono);text-transform:uppercase;letter-spacing:.05em;color:var(--muted);padding:6px 0;}
@@ -229,12 +265,9 @@
     <div class="collap" id="collapLatest">
       <div class="ch" onclick="document.getElementById('collapLatest').classList.toggle('closed')"><span class="cv">▼</span> This chat</div>
       <div class="cc">
-        <div class="stat"><div class="l">Avg faithfulness</div><div class="n" id="sFaith">—</div></div>
-        <div class="stat"><div class="l">Pass rate</div><div class="n" id="sPass" style="color:var(--pass)">—</div></div>
-        <span class="h" style="margin-top:4px">Faithfulness trend</span>
-        <svg id="spark" viewBox="0 0 210 78" style="width:100%"></svg>
-        <span class="h" style="margin-top:4px">Evals this chat</span>
-        <div class="stat"><div class="n" id="sRuns" style="font-size:26px">—</div></div>
+        <div class="stat"><div class="l">Evals this chat</div><div class="n" id="sRuns" style="font-size:26px">—</div></div>
+        <span class="h" style="margin-top:8px">Metrics measured</span>
+        <div id="sMetrics"></div>
       </div>
     </div>
   </div>
@@ -410,42 +443,97 @@ navChat.onclick=()=>show("chat");navDash.onclick=()=>show("dash");navRuns.onclic
 
   // ---- turn assistant content blocks into HTML, parsing eval JSON into cards ----
   let cardSeq=0;
+  const PASS_T=0.7;
+  const RULER='<svg viewBox="0 0 24 24" fill="none"><path d="M3 8h18v8H3z" stroke="currentColor" stroke-width="1.8"/><path d="M7 8v3M11 8v4M15 8v3M19 8v4" stroke="currentColor" stroke-width="1.6"/></svg>';
+  const BOOK='<svg viewBox="0 0 24 24" fill="none"><path d="M5 4h11a2 2 0 012 2v14H7a2 2 0 01-2-2z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>';
+  const BOT='<svg viewBox="0 0 24 24" fill="none"><rect x="5" y="8" width="14" height="10" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M12 5v3M9 13h.01M15 13h.01" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
+  function metricColor(s){return s==null?"var(--faint)":(s>=PASS_T?"var(--pass)":(s>=0.4?"var(--warn)":"var(--fail)"));}
+  // build a "calculation" chip row from a metric's details object
+  function calcChips(details){
+    if(!details||typeof details!=="object")return "";
+    const chips=[];
+    for(const [k,v] of Object.entries(details)){
+      if(Array.isArray(v)){
+        if(!v.length)continue;
+        chips.push(`<span class="xchip bad"><b>${v.length}</b> ${esc(k.replace(/_/g," "))}</span>`);
+        v.slice(0,4).forEach(item=>chips.push(`<span class="xchip bad">${esc(String(item)).slice(0,80)}</span>`));
+      } else if(typeof v==="number"){
+        chips.push(`<span class="xchip">${esc(k.replace(/_/g," "))} <b>${v}</b></span>`);
+      } else if(typeof v==="string"&&v){
+        chips.push(`<span class="xchip">${esc(k.replace(/_/g," "))}: ${esc(v).slice(0,60)}</span>`);
+      }
+    }
+    return chips.length?`<div class="xcalc">${chips.join("")}</div>`:"";
+  }
   function evalCardHTML(obj){
     const cases=obj.per_case||[];const agg=obj.aggregate||{};
     const metricNames=Object.keys(agg);
-    const anyFail=cases.some(c=>caseFail(c))||metricNames.some(m=>agg[m]&&agg[m].pass_rate!=null&&agg[m].pass_rate<1);
-    const verdict=anyFail?'<span class="everdict somefail">needs review</span>':'<span class="everdict allpass">all pass</span>';
-    const heat=cases.map(c=>{const s=cScore(c);const col=s==null?"#9CA3AF":(s>=0.7?"#15924F":(s>=0.4?"#D9A441":"#D5453B"));return `<div class="hc" style="background:${col}" title="${fm(s)}"></div>`;}).join("");
-    const aggLine=metricNames.map(m=>`${esc(m)} ${fm(agg[m]&&agg[m].mean_score)}`).join(" · ")||"eval";
-    const body=cases.map(c=>{
-      const m=cMetric(c);const s=cScore(c);const pass=!caseFail(c);
-      return `<div class="ecase">
-        <div class="eq"><span class="esc ${pass?'good':'bad'}">${fm(s)} ${pass?'PASS':'FAIL'}</span><span>${esc(c.input||'—')}</span></div>
-        <div class="ecols">
-          <div class="ecol"><div class="l">Context</div><div class="v">${esc(ctxOf(c))}</div></div>
-          <div class="ecol"><div class="l">Actual output</div><div class="v">${esc(c.actual_output||'—')}</div></div>
-          <div class="ecol why ${pass?'good':'bad'}"><div class="l">${esc((m&&m.name)||'score')} · why</div><div class="v">${esc((m&&m.reason)||'(no reason recorded)')}</div></div>
-        </div></div>`;
-    }).join("")||'<div class="ecase"><div class="v" style="color:var(--muted)">No per-case detail.</div></div>';
+    const thr=obj.threshold||PASS_T;
+    const anyFail=metricNames.some(m=>agg[m]&&agg[m].pass_rate!=null&&agg[m].pass_rate<1)||cases.some(c=>!casePass(c));
+    const verdict=anyFail?'<span class="everdict somefail">Needs review</span>':'<span class="everdict allpass">All pass</span>';
+    const headMetric=metricNames[0]||"eval";
+    // metric meters (every metric in this run)
+    const meters=metricNames.map(m=>{
+      const a=agg[m]||{};const s=a.mean_score;const col=metricColor(s);const pct=Math.max(2,Math.round((s||0)*100));
+      const tcol=s==null?"var(--muted)":(s>=thr?"var(--pass-ink)":"var(--fail-ink)");
+      return `<div class="emeter">
+        <div class="erow"><span class="emname">${esc(m)}</span><span class="emval" style="color:${tcol}">${fm(s)}</span></div>
+        <div class="emtrack"><div class="emfill" style="width:${pct}%;background:${col}"></div><div class="emthresh" style="left:${Math.round(thr*100)}%"></div></div>
+      </div>`;
+    }).join("");
+    // cases (collapsible dropdowns)
+    const body=cases.map((c,ci)=>{
+      const cid="ec"+(cardSeq)+"_"+ci;
+      const sMin=caseScore(c);const pass=casePass(c);
+      const scoreObj=c.scores||{};
+      const ctx=ctxText(c),out=c.actual_output||"";
+      const hasCompare=(ctx&&ctx!=="—")||out;
+      const compare=hasCompare?`<div class="ecols">
+          <div class="ecol"><div class="l">${BOOK} Retrieved context</div><div class="v">${esc(ctx)}</div></div>
+          <div class="ecol"><div class="l">${BOT} Model output</div><div class="v">${esc(out||'—')}</div></div>
+        </div>`:"";
+      // per-metric explanation dropdowns
+      const expls=Object.entries(scoreObj).map(([mn,r],xi)=>{
+        const xid=cid+"_x"+xi;const mp=(typeof r.success==="boolean")?r.success:((r.score||0)>=thr);
+        return `<div class="expl" id="${xid}">
+          <div class="xh" onclick="document.getElementById('${xid}').classList.toggle('open')">
+            <span class="esc ${mp?'good':'bad'}">${fm(r.score)}</span>
+            <span class="xmname">${esc(mn)} — why</span>
+            <span class="xcaret">▶</span>
+          </div>
+          <div class="xbody">
+            <div class="xwhy ${mp?'good':'bad'}">${esc(r.reason||'(no explanation recorded)')}</div>
+            ${calcChips(r.details)}
+          </div>
+        </div>`;
+      }).join("");
+      return `<div class="ecase" id="${cid}">
+        <div class="ech" onclick="document.getElementById('${cid}').classList.toggle('open')">
+          <span class="esc ${pass?'good':'bad'}">${fm(sMin)} ${pass?'pass':'fail'}</span>
+          <span class="eq">${esc(c.input||'—')}</span>
+          <span class="ecaret">▶</span>
+        </div>
+        <div class="ebody">${compare}${expls}</div>
+      </div>`;
+    }).join("")||'<div class="ecase"><div class="ebody" style="display:block;color:var(--muted);padding:12px 15px">No per-case detail.</div></div>';
     const id="ev"+(cardSeq++);
     return `<div class="evalcard" id="${id}">
-      <div class="ehd" onclick="document.getElementById('${id}').classList.toggle('open')">
-        <span class="ecaret">▶</span>
-        <div class="etitle"><div class="ename">${esc(obj.golden_set||obj.run_id||'eval')}</div><div class="esub">${aggLine} · ${cases.length} cases</div></div>
+      <div class="ehd">
+        <span class="eicon">${RULER}</span>
+        <div class="etitle"><div class="ename">${esc(obj.golden_set||headMetric)}</div><div class="esub">threshold ${fm(thr)} · ${cases.length} case${cases.length===1?'':'s'}</div></div>
         ${verdict}
       </div>
-      <div class="emini">${heat}</div>
-      <div class="ebody">${body}</div>
+      <div class="emeters">${meters||'<div class="esub">no metric aggregate</div>'}</div>
+      ${body}
     </div>`;
   }
   function cMetric(c){const sc=c&&c.scores?c.scores:{};const k=Object.keys(sc)[0];return k?{name:k,...sc[k]}:null;}
-  function cScore(c){const m=cMetric(c);return m&&typeof m.score==="number"?m.score:(typeof c.min_score==="number"?c.min_score:null);}
-  function caseFail(c){const m=cMetric(c);if(m&&typeof m.success==="boolean")return !m.success;const s=cScore(c);return s==null?false:s<0.7;}
-  function ctxOf(c){const rc=c.retrieval_context||c.context;return Array.isArray(rc)?rc.join(" • "):(rc||"—");}
+  function caseScore(c){const m=cMetric(c);return m&&typeof m.score==="number"?m.score:(typeof c.min_score==="number"?c.min_score:null);}
+  function casePass(c){const sc=c&&c.scores?c.scores:{};const ks=Object.keys(sc);if(ks.length)return ks.every(k=>typeof sc[k].success==="boolean"?sc[k].success:(sc[k].score||0)>=0.7);const s=caseScore(c);return s==null?true:s>=0.7;}
+  function ctxText(c){const rc=c.retrieval_context||c.context;return Array.isArray(rc)?rc.join(" • "):(rc||"—");}
 
   function tryEvalJSON(text){
-    // detect a run_eval-style JSON object embedded in the text
-    const t=text.trim();
+    const t=(text||"").trim();
     let obj=null;
     try{obj=JSON.parse(t);}catch(e){
       const m=t.match(/\{[\s\S]*\}/);if(m){try{obj=JSON.parse(m[0]);}catch(_){}}
@@ -491,22 +579,35 @@ navChat.onclick=()=>show("chat");navDash.onclick=()=>show("dash");navRuns.onclic
     return found;
   }
 
-  // per-chat side panel: counts/stats scoped to the CURRENT conversation
+  // per-chat side panel: evals count + every metric measured in THIS conversation
   function renderChatSide(){
     const s=cur();const evals=(s&&s.evals)||[];
-    const fa=evals.map(faith).filter(v=>v!=null&&!isNaN(v));
-    const prs=evals.map(e=>e.aggregate&&e.aggregate.faithfulness&&e.aggregate.faithfulness.pass_rate).filter(v=>v!=null);
-    document.getElementById("sFaith").textContent=fa.length?fm(mean(fa)):"—";
-    document.getElementById("sPass").textContent=prs.length?Math.round(mean(prs)*100)+"%":"—";
     document.getElementById("sRuns").textContent=evals.length;
-    const vals=fa.slice(-6),W=210,H=78,pad=8,n=vals.length;
-    const x=i=>pad+(n<=1?0:i*(W-2*pad)/(n-1)),y=v=>8+(1-v)*(H-16);
-    let line="",pts="";
-    vals.forEach((v,i)=>{line+=(i?" ":"")+x(i).toFixed(1)+","+y(v).toFixed(1);});
-    vals.forEach((v,i)=>{const c=v>=0.7?"#15924F":"#D5453B";pts+=`<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="2.8" fill="${c}"/>`;});
-    document.getElementById("spark").innerHTML = vals.length
-      ? `<line x1="${pad}" y1="${y(0.7).toFixed(1)}" x2="${W-pad}" y2="${y(0.7).toFixed(1)}" stroke="#9CA3AF" stroke-width="1" stroke-dasharray="3 3"/><polyline points="${line}" fill="none" stroke="#2563EB" stroke-width="2"/>${pts}`
-      : `<text x="105" y="42" text-anchor="middle" fill="#9CA3AF" font-size="11" font-family="JetBrains Mono">no evals yet</text>`;
+    // aggregate each metric across this chat's evals (weighted by case count n)
+    const byMetric={};
+    for(const e of evals){
+      const agg=e.aggregate||{};
+      for(const [m,a] of Object.entries(agg)){
+        if(a&&typeof a.mean_score==="number"){
+          const n=a.n||1;(byMetric[m]=byMetric[m]||{sum:0,w:0,pr:0,prw:0});
+          byMetric[m].sum+=a.mean_score*n;byMetric[m].w+=n;
+          if(typeof a.pass_rate==="number"){byMetric[m].pr+=a.pass_rate*n;byMetric[m].prw+=n;}
+        }
+      }
+    }
+    const names=Object.keys(byMetric).sort();
+    const el=document.getElementById("sMetrics");
+    if(!names.length){el.innerHTML='<div style="color:var(--faint);font-size:11.5px;padding:4px 0">No evals in this chat yet.</div>';return;}
+    el.innerHTML=names.map(m=>{
+      const d=byMetric[m];const avg=d.w?d.sum/d.w:null;
+      const col=avg==null?"var(--faint)":(avg>=0.7?"var(--pass)":(avg>=0.4?"var(--warn)":"var(--fail)"));
+      const tcol=avg==null?"var(--muted)":(avg>=0.7?"var(--pass-ink)":"var(--fail-ink)");
+      const pct=Math.max(2,Math.round((avg||0)*100));
+      return `<div class="smetric">
+        <div class="sr"><span class="snm">${m}</span><span class="sv" style="color:${tcol}">${fm(avg)}</span></div>
+        <div class="strack"><div class="sfill" style="width:${pct}%;background:${col}"></div></div>
+      </div>`;
+    }).join("");
   }
   window.renderChatSide=renderChatSide; // let load() refresh it too
 
