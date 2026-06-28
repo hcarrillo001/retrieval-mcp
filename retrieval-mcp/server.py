@@ -105,6 +105,9 @@ def run_eval(golden_set: str, metrics: List[str], threshold: float = 0.7,
     try:
         for i, case in enumerate(cases):
             row = {"index": i, "input": case.get("input", ""),
+                   "actual_output": case.get("actual_output", ""),
+                   "expected_output": case.get("expected_output", ""),
+                   "retrieval_context": case.get("retrieval_context") or case.get("context") or [],
                    "scores": {}, "min_score": 1.0}
             for m in metrics:
                 res = _run_metric(m, case, threshold)
