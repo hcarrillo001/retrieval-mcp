@@ -31,18 +31,19 @@
   .nav svg{width:19px;height:19px;}
 
   /* center */
-  .main{background:var(--card);display:flex;flex-direction:column;min-width:0;}
+  .main{background:var(--card);display:flex;flex-direction:column;min-width:0;min-height:0;height:100%;overflow:hidden;}
   .mhd{padding:13px 18px;border-bottom:0.5px solid var(--line);display:flex;align-items:center;justify-content:space-between;}
   .mhd .t{font-weight:600;font-size:15px;}
   .mhd .s{font-family:var(--mono);font-size:10.5px;color:var(--muted);display:flex;align-items:center;gap:7px;}
   .mhd .dot{width:7px;height:7px;border-radius:50%;background:var(--pass);}
-  .view{flex:1;min-height:0;overflow-y:auto;}
+  .view{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;}
 
   /* chat */
   .chatlog{padding:18px;display:flex;flex-direction:column;gap:11px;}
   .cmsg{max-width:80%;padding:9px 13px;border-radius:13px;font-size:13.5px;line-height:1.55;}
   .cmsg.u{align-self:flex-end;background:var(--ink);color:#fff;border-bottom-right-radius:4px;white-space:pre-wrap;}
-  .cmsg.a{align-self:flex-start;background:var(--soft);border-bottom-left-radius:4px;width:100%;max-width:92%;}
+  .cmsg.a{align-self:flex-start;background:var(--soft);border-bottom-left-radius:4px;width:100%;max-width:92%;overflow-wrap:anywhere;word-break:break-word;}
+  .cmsg.a pre,.cmsg.a code{white-space:pre-wrap;overflow-wrap:anywhere;}
   .cmsg.a img{max-width:100%;border-radius:9px;margin-top:9px;border:0.5px solid var(--line);display:block;}
   .cmsg .tool{font-family:var(--mono);font-size:10.5px;color:var(--muted);margin:3px 0;}
   .srow{display:flex;align-items:center;gap:9px;margin:6px 0;}
@@ -85,7 +86,44 @@
   .stat .l{font-size:11px;color:var(--muted);}
   .stat .n{font-family:var(--display);font-weight:700;font-size:22px;margin-top:3px;}
   .hide{display:none;}
-  @media(max-width:780px){.frame{grid-template-columns:52px 1fr;}.side{display:none;}}
+
+  /* runs inspector */
+  .runs{padding:18px;}
+  .runs h2{font-size:14px;margin:0 0 14px;}
+  .sumrow{display:grid;grid-template-columns:repeat(4,1fr);gap:11px;margin-bottom:16px;}
+  .sum{background:var(--soft);border-radius:9px;padding:12px 14px;}
+  .sum .l{font-family:var(--mono);font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);}
+  .sum .n{font-family:var(--display);font-weight:700;font-size:22px;margin-top:5px;}
+  .runcard{border:0.5px solid var(--line);border-radius:11px;margin-bottom:12px;overflow:hidden;}
+  .runhd{display:flex;align-items:center;gap:14px;padding:13px 15px;cursor:pointer;}
+  .runhd:hover{background:var(--soft);}
+  .runhd .meta{flex:1;min-width:0;}
+  .runhd .rid{font-family:var(--mono);font-size:12px;font-weight:600;}
+  .runhd .sub{font-size:11px;color:var(--muted);margin-top:2px;}
+  .runhd .agg{display:flex;gap:8px;align-items:center;}
+  .heat{display:flex;gap:3px;flex-wrap:wrap;max-width:180px;}
+  .heatcell{width:13px;height:13px;border-radius:3px;}
+  .caret{color:var(--muted);transition:transform .15s;font-size:12px;}
+  .runcard.open .caret{transform:rotate(90deg);}
+  .casebody{display:none;border-top:0.5px solid var(--line);padding:6px 0;}
+  .runcard.open .casebody{display:block;}
+  .case{border-bottom:0.5px solid var(--line);padding:12px 15px;}
+  .case:last-child{border-bottom:0;}
+  .case .chd{display:flex;align-items:center;gap:9px;margin-bottom:9px;}
+  .case .cidx{font-family:var(--mono);font-size:11px;color:var(--muted);}
+  .case .cq{font-size:13px;font-weight:500;flex:1;}
+  .cols{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;}
+  .col{background:var(--soft);border-radius:8px;padding:9px 10px;min-width:0;}
+  .col .lab{font-family:var(--mono);font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin-bottom:5px;}
+  .col .val{font-size:12px;line-height:1.45;overflow-wrap:anywhere;}
+  .col.reason{background:transparent;border:0.5px solid var(--line);}
+  .col.reason.bad{border-color:var(--fail);background:var(--fail-soft);}
+  .col.reason.good{border-color:var(--pass);background:var(--pass-soft);}
+  .scorebadge{font-family:var(--mono);font-size:13px;font-weight:700;padding:3px 9px;border-radius:7px;}
+  .scorebadge.good{background:var(--pass-soft);color:var(--pass);}
+  .scorebadge.bad{background:var(--fail-soft);color:var(--fail);}
+  @media(max-width:1100px){.cols{grid-template-columns:1fr 1fr;}}
+  @media(max-width:780px){.frame{grid-template-columns:52px 1fr;}.side{display:none;}.cols{grid-template-columns:1fr;}.sumrow{grid-template-columns:1fr 1fr;}}
 </style>
 </head>
 <body>
@@ -95,6 +133,7 @@
     <div class="logo"><svg viewBox="0 0 32 32" fill="none"><circle cx="13.5" cy="13.5" r="9" stroke="currentColor" stroke-width="2.6"/><path d="M20.5 20.5L27 27" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/><path d="M9.5 13.8l2.8 2.8 5-5.4" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
     <button class="nav active" id="navChat" title="Chat"><svg viewBox="0 0 24 24" fill="none"><path d="M4 5h16v11H8l-4 3z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></button>
     <button class="nav" id="navDash" title="Dashboard"><svg viewBox="0 0 24 24" fill="none"><path d="M4 13h6v7H4zM14 4h6v16h-6zM4 4h6v5H4z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></button>
+    <button class="nav" id="navRuns" title="Runs"><svg viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="8" cy="6" r="1.6" fill="currentColor"/><circle cx="14" cy="12" r="1.6" fill="currentColor"/><circle cx="10" cy="18" r="1.6" fill="currentColor"/></svg></button>
   </div>
 
   <div class="main">
@@ -120,6 +159,12 @@
       <div class="card"><h3>Model comparison <span class="m">avg faithfulness</span></h3><canvas id="models"></canvas></div>
       <div class="card"><h3>Models we've run <span class="m">generator · avg</span></h3><div id="leaderboard"></div></div>
       <div class="card"><h3>Run history <span class="m">most recent</span></h3><div id="history"></div></div>
+    </div>
+
+    <div class="view runs hide" id="viewRuns">
+      <h2>Run inspector</h2>
+      <div class="sumrow" id="runSummary"></div>
+      <div id="runList"></div>
     </div>
   </div>
 
@@ -151,12 +196,67 @@ const faith=r=>r.aggregate&&r.aggregate.faithfulness&&r.aggregate.faithfulness.m
 
 async function load(){
   let runs,live=false;
-  try{const r=await fetch("/api/runs?limit=200");if(r.ok){const j=await r.json();if(Array.isArray(j)&&j.length){runs=j;live=true;}}}catch(e){}
+  const key=new URLSearchParams(location.search).get("key");
+  const q="/api/runs?limit=200"+(key?("&key="+encodeURIComponent(key)):"");
+  try{const r=await fetch(q);if(r.ok){const j=await r.json();if(Array.isArray(j)&&j.length){runs=j;live=true;}}}catch(e){}
   if(!runs)runs=SAMPLE;
   document.getElementById("state").textContent=live?"live · Supabase":"sample data";
   if(!live)document.getElementById("dot").style.background="#B08A4A";
   runs=runs.slice().sort((a,b)=>a.timestamp<b.timestamp?-1:1);
-  renderSide(runs);renderDash(runs);
+  renderSide(runs);renderDash(runs);renderRuns(runs);
+}
+
+// ---- Run inspector ----
+function esc(s){return String(s==null?"":s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));}
+function firstMetric(c){const sc=c&&c.scores?c.scores:{};const k=Object.keys(sc)[0];return k?{name:k,...sc[k]}:null;}
+function caseScore(c){const m=firstMetric(c);return m&&typeof m.score==="number"?m.score:(typeof c.min_score==="number"?c.min_score:null);}
+function casePass(c){const m=firstMetric(c);if(m&&typeof m.success==="boolean")return m.success;const s=caseScore(c);return s==null?null:s>=0.7;}
+function ctxText(c){const rc=c.retrieval_context||c.context;if(Array.isArray(rc))return rc.join(" • ");return rc||"—";}
+
+function renderRuns(runs){
+  const recent=runs.slice().reverse();
+  // summary across all runs
+  const allCases=recent.flatMap(r=>r.per_case||[]);
+  const passed=allCases.filter(c=>casePass(c)===true).length;
+  const failed=allCases.filter(c=>casePass(c)===false).length;
+  const avgF=mean(runs.map(faith).filter(Boolean));
+  document.getElementById("runSummary").innerHTML=
+    `<div class="sum"><div class="l">Total runs</div><div class="n">${runs.length}</div></div>`+
+    `<div class="sum"><div class="l">Cases passed</div><div class="n" style="color:var(--pass)">${passed}</div></div>`+
+    `<div class="sum"><div class="l">Cases failed</div><div class="n" style="color:var(--fail)">${failed}</div></div>`+
+    `<div class="sum"><div class="l">Avg faithfulness</div><div class="n">${fm(avgF)}</div></div>`;
+
+  document.getElementById("runList").innerHTML = recent.map((r,ri)=>{
+    const cases=r.per_case||[];
+    const agg=r.aggregate||{};
+    const metricNames=Object.keys(agg);
+    const aggChips=metricNames.map(m=>{const s=agg[m]&&agg[m].mean_score;const ok=(s!=null)&&s>=(r.threshold||0.7);return `<span class="scorebadge ${ok?'good':'bad'}" title="${esc(m)}">${esc(m.slice(0,4))} ${fm(s)}</span>`;}).join(" ");
+    const heat=cases.map(c=>{const s=caseScore(c);const col=s==null?"#9CA3AF":(s>=0.7?"#15924F":(s>=0.4?"#D9A441":"#D5453B"));return `<div class="heatcell" style="background:${col}" title="case ${c.index!=null?c.index:''}: ${fm(s)}"></div>`;}).join("");
+    const body = cases.length? cases.map(c=>{
+      const m=firstMetric(c);const s=caseScore(c);const pass=casePass(c);
+      const reason=(m&&m.reason)?m.reason:"(no judge reason recorded)";
+      return `<div class="case">
+        <div class="chd"><span class="cidx">#${c.index!=null?c.index:''}</span><span class="cq">${esc(c.input||'—')}</span>
+          <span class="scorebadge ${pass?'good':'bad'}">${fm(s)} ${pass?'PASS':'FAIL'}</span></div>
+        <div class="cols">
+          <div class="col"><div class="lab">Input</div><div class="val">${esc(c.input||'—')}</div></div>
+          <div class="col"><div class="lab">Context</div><div class="val">${esc(ctxText(c))}</div></div>
+          <div class="col"><div class="lab">Expected</div><div class="val">${esc(c.expected_output||'—')}</div></div>
+          <div class="col"><div class="lab">Actual</div><div class="val">${esc(c.actual_output||'—')}</div></div>
+          <div class="col reason ${pass?'good':'bad'}"><div class="lab">${esc((m&&m.name)||'score')} · why</div><div class="val">${esc(reason)}</div></div>
+        </div></div>`;
+    }).join("") : `<div class="case"><div class="val" style="color:var(--muted)">No per-case detail stored for this run.</div></div>`;
+    return `<div class="runcard" id="rc${ri}">
+      <div class="runhd" onclick="document.getElementById('rc${ri}').classList.toggle('open')">
+        <span class="caret">▶</span>
+        <div class="meta"><div class="rid">${esc(r.label||r.run_id||'run')}</div>
+          <div class="sub">${esc((r.timestamp||'').slice(0,16).replace('T',' '))} · ${esc(r.golden_set||'')} · ${cases.length} cases · judge ${esc(r.judge_model||'—')}</div></div>
+        <div class="heat">${heat}</div>
+        <div class="agg">${aggChips}</div>
+      </div>
+      <div class="casebody">${body}</div>
+    </div>`;
+  }).join("") || `<div style="color:var(--muted)">No runs yet. Run an eval to see it here.</div>`;
 }
 
 function renderSide(runs){
@@ -206,16 +306,19 @@ function renderDash(runs){
 }
 
 /* nav switching */
-const navChat=document.getElementById("navChat"),navDash=document.getElementById("navDash");
+const navChat=document.getElementById("navChat"),navDash=document.getElementById("navDash"),navRuns=document.getElementById("navRuns");
 function show(view){
-  const chat=view==="chat";
-  document.getElementById("viewChat").classList.toggle("hide",!chat);
-  document.getElementById("chatInputBar").classList.toggle("hide",!chat);
-  document.getElementById("viewDash").classList.toggle("hide",chat);
-  navChat.classList.toggle("active",chat);navDash.classList.toggle("active",!chat);
-  document.getElementById("mainTitle").textContent=chat?"Ask RetriEval":"Dashboard";
+  const isChat=view==="chat",isDash=view==="dash",isRuns=view==="runs";
+  document.getElementById("viewChat").classList.toggle("hide",!isChat);
+  document.getElementById("chatInputBar").classList.toggle("hide",!isChat);
+  document.getElementById("viewDash").classList.toggle("hide",!isDash);
+  document.getElementById("viewRuns").classList.toggle("hide",!isRuns);
+  navChat.classList.toggle("active",isChat);
+  navDash.classList.toggle("active",isDash);
+  navRuns.classList.toggle("active",isRuns);
+  document.getElementById("mainTitle").textContent=isChat?"Ask RetriEval":(isRuns?"Run inspector":"Dashboard");
 }
-navChat.onclick=()=>show("chat");navDash.onclick=()=>show("dash");
+navChat.onclick=()=>show("chat");navDash.onclick=()=>show("dash");navRuns.onclick=()=>show("runs");
 
 /* chat */
 (function(){
