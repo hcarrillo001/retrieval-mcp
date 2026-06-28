@@ -19,7 +19,22 @@
   html,body{height:100%;}
   body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--ui);font-size:14px;line-height:1.5;}
   .app{height:100vh;padding:14px;}
-  .frame{height:100%;display:grid;grid-template-columns:60px 1fr 248px;background:var(--line);gap:1px;border:0.5px solid var(--line);border-radius:14px;overflow:hidden;}
+  .frame{height:100%;display:grid;grid-template-columns:60px 240px 1fr 248px;background:var(--line);gap:1px;border:0.5px solid var(--line);border-radius:14px;overflow:hidden;}
+
+  /* chat sessions sidebar */
+  .chats{background:var(--card);display:flex;flex-direction:column;min-height:0;overflow:hidden;}
+  .chats .chd{padding:13px 14px;border-bottom:0.5px solid var(--line);display:flex;align-items:center;justify-content:space-between;}
+  .chats .chd span{font-weight:600;font-size:13px;}
+  .newchat{border:0.5px solid var(--line);background:var(--card);border-radius:8px;padding:5px 10px;font-size:12px;cursor:pointer;color:var(--ink);display:flex;align-items:center;gap:5px;}
+  .newchat:hover{background:var(--soft);}
+  .chatlist{flex:1;overflow-y:auto;padding:8px;}
+  .chatitem{padding:9px 11px;border-radius:8px;cursor:pointer;margin-bottom:3px;}
+  .chatitem:hover{background:var(--soft);}
+  .chatitem.active{background:var(--bg-accent,var(--soft));border:0.5px solid var(--blue);}
+  .chatitem .ti{font-size:12.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .chatitem .mt{font-size:10.5px;color:var(--muted);margin-top:2px;display:flex;justify-content:space-between;}
+  .chatitem .del{color:var(--muted);font-size:11px;opacity:0;}
+  .chatitem:hover .del{opacity:1;}
 
   /* left rail */
   .rail{background:var(--card);display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 0;}
@@ -46,6 +61,43 @@
   .cmsg.a pre,.cmsg.a code{white-space:pre-wrap;overflow-wrap:anywhere;}
   .cmsg.a img{max-width:100%;border-radius:9px;margin-top:9px;border:0.5px solid var(--line);display:block;}
   .cmsg .tool{font-family:var(--mono);font-size:10.5px;color:var(--muted);margin:3px 0;}
+
+  /* eval result card (inline in chat) */
+  .evalcard{border:0.5px solid var(--line);border-radius:11px;overflow:hidden;margin-top:6px;background:var(--card);}
+  .evalcard .ehd{display:flex;align-items:center;gap:10px;padding:11px 13px;cursor:pointer;}
+  .evalcard .ehd:hover{background:var(--soft);}
+  .evalcard .etitle{flex:1;min-width:0;}
+  .evalcard .ename{font-family:var(--mono);font-size:12px;font-weight:600;}
+  .evalcard .esub{font-size:10.5px;color:var(--muted);margin-top:2px;}
+  .evalcard .everdict{font-family:var(--mono);font-size:11px;font-weight:700;padding:3px 9px;border-radius:7px;}
+  .everdict.allpass{background:var(--pass-soft);color:var(--pass);}
+  .everdict.somefail{background:var(--fail-soft);color:var(--fail);}
+  .evalcard .ecaret{color:var(--muted);font-size:11px;transition:transform .15s;}
+  .evalcard.open .ecaret{transform:rotate(90deg);}
+  .evalcard .ebody{display:none;border-top:0.5px solid var(--line);}
+  .evalcard.open .ebody{display:block;}
+  .emini{display:flex;gap:3px;padding:0 13px 11px;flex-wrap:wrap;}
+  .emini .hc{width:12px;height:12px;border-radius:3px;}
+  .ecase{padding:11px 13px;border-bottom:0.5px solid var(--line);}
+  .ecase:last-child{border-bottom:0;}
+  .ecase .eq{font-size:12.5px;font-weight:500;margin-bottom:7px;display:flex;gap:8px;align-items:baseline;}
+  .ecols{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .ecol{background:var(--soft);border-radius:7px;padding:8px 9px;min-width:0;}
+  .ecol .l{font-family:var(--mono);font-size:9px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:4px;}
+  .ecol .v{font-size:11.5px;line-height:1.4;overflow-wrap:anywhere;}
+  .ecol.why{grid-column:1/-1;border:0.5px solid var(--line);background:transparent;}
+  .ecol.why.bad{border-color:var(--fail);background:var(--fail-soft);}
+  .ecol.why.good{border-color:var(--pass);background:var(--pass-soft);}
+  .esc{font-family:var(--mono);font-size:11px;font-weight:700;padding:2px 7px;border-radius:6px;}
+  .esc.good{background:var(--pass-soft);color:var(--pass);}
+  .esc.bad{background:var(--fail-soft);color:var(--fail);}
+
+  /* collapsible section */
+  .collap > .ch{display:flex;align-items:center;gap:8px;cursor:pointer;font-size:11px;font-family:var(--mono);text-transform:uppercase;letter-spacing:.05em;color:var(--muted);padding:6px 0;}
+  .collap > .ch .cv{transition:transform .15s;font-size:10px;}
+  .collap.closed > .ch .cv{transform:rotate(-90deg);}
+  .collap > .cc{overflow:hidden;}
+  .collap.closed > .cc{display:none;}
   .srow{display:flex;align-items:center;gap:9px;margin:6px 0;}
   .srow .nm{font-family:var(--mono);font-size:12px;width:130px;}
   .track{flex:1;height:8px;border-radius:99px;background:#E4E6EB;overflow:hidden;}
@@ -122,8 +174,8 @@
   .scorebadge{font-family:var(--mono);font-size:13px;font-weight:700;padding:3px 9px;border-radius:7px;}
   .scorebadge.good{background:var(--pass-soft);color:var(--pass);}
   .scorebadge.bad{background:var(--fail-soft);color:var(--fail);}
-  @media(max-width:1100px){.cols{grid-template-columns:1fr 1fr;}}
-  @media(max-width:780px){.frame{grid-template-columns:52px 1fr;}.side{display:none;}.cols{grid-template-columns:1fr;}.sumrow{grid-template-columns:1fr 1fr;}}
+  @media(max-width:1100px){.cols{grid-template-columns:1fr 1fr;}.frame{grid-template-columns:60px 1fr 248px;}.chats{display:none;}}
+  @media(max-width:780px){.frame{grid-template-columns:52px 1fr;}.side{display:none;}.chats{display:none;}.cols{grid-template-columns:1fr;}.sumrow{grid-template-columns:1fr 1fr;}.ecols{grid-template-columns:1fr;}}
 </style>
 </head>
 <body>
@@ -134,6 +186,11 @@
     <button class="nav active" id="navChat" title="Chat"><svg viewBox="0 0 24 24" fill="none"><path d="M4 5h16v11H8l-4 3z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></button>
     <button class="nav" id="navDash" title="Dashboard"><svg viewBox="0 0 24 24" fill="none"><path d="M4 13h6v7H4zM14 4h6v16h-6zM4 4h6v5H4z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></button>
     <button class="nav" id="navRuns" title="Runs"><svg viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="8" cy="6" r="1.6" fill="currentColor"/><circle cx="14" cy="12" r="1.6" fill="currentColor"/><circle cx="10" cy="18" r="1.6" fill="currentColor"/></svg></button>
+  </div>
+
+  <div class="chats" id="chatsPanel">
+    <div class="chd"><span>Chats</span><button class="newchat" id="newChatBtn">+ New</button></div>
+    <div class="chatlist" id="chatList"></div>
   </div>
 
   <div class="main">
@@ -158,7 +215,7 @@
       <div class="card"><h3>Faithfulness over time <span class="m">by judge model</span></h3><canvas id="trend"></canvas></div>
       <div class="card"><h3>Model comparison <span class="m">avg faithfulness</span></h3><canvas id="models"></canvas></div>
       <div class="card"><h3>Models we've run <span class="m">generator · avg</span></h3><div id="leaderboard"></div></div>
-      <div class="card"><h3>Run history <span class="m">most recent</span></h3><div id="history"></div></div>
+      <div class="card collap" id="collapHistory"><h3 class="ch" style="cursor:pointer" onclick="document.getElementById('collapHistory').classList.toggle('closed')"><span class="cv" style="font-size:10px">▼</span> Run history <span class="m">most recent</span></h3><div class="cc"><div id="history"></div></div></div>
     </div>
 
     <div class="view runs hide" id="viewRuns">
@@ -169,13 +226,17 @@
   </div>
 
   <div class="side">
-    <span class="h">Latest run</span>
-    <div class="stat"><div class="l">Avg faithfulness</div><div class="n" id="sFaith">—</div></div>
-    <div class="stat"><div class="l">Pass rate</div><div class="n" id="sPass" style="color:var(--pass)">—</div></div>
-    <span class="h" style="margin-top:4px">Faithfulness trend</span>
-    <svg id="spark" viewBox="0 0 210 78" style="width:100%"></svg>
-    <span class="h" style="margin-top:4px">Total runs</span>
-    <div class="stat"><div class="n" id="sRuns" style="font-size:26px">—</div></div>
+    <div class="collap" id="collapLatest">
+      <div class="ch" onclick="document.getElementById('collapLatest').classList.toggle('closed')"><span class="cv">▼</span> Latest run</div>
+      <div class="cc">
+        <div class="stat"><div class="l">Avg faithfulness</div><div class="n" id="sFaith">—</div></div>
+        <div class="stat"><div class="l">Pass rate</div><div class="n" id="sPass" style="color:var(--pass)">—</div></div>
+        <span class="h" style="margin-top:4px">Faithfulness trend</span>
+        <svg id="spark" viewBox="0 0 210 78" style="width:100%"></svg>
+        <span class="h" style="margin-top:4px">Total runs</span>
+        <div class="stat"><div class="n" id="sRuns" style="font-size:26px">—</div></div>
+      </div>
+    </div>
   </div>
 
 </div></div>
@@ -320,25 +381,141 @@ function show(view){
 }
 navChat.onclick=()=>show("chat");navDash.onclick=()=>show("dash");navRuns.onclick=()=>show("runs");
 
-/* chat */
+/* chat + sessions (localStorage-persisted) */
 (function(){
   const log=document.getElementById("chatlog"),box=document.getElementById("chatbox");
   const send=document.getElementById("chatsend"),note=document.getElementById("cnote");
-  const token=new URLSearchParams(location.search).get("key");const history=[];
+  const listEl=document.getElementById("chatList"),newBtn=document.getElementById("newChatBtn");
+  const token=new URLSearchParams(location.search).get("key");
+  const LS_KEY="retrieval_chats_v1";
   const esc=s=>(s||"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
-  function add(role,html){const d=document.createElement("div");d.className="cmsg "+(role==="user"?"u":"a");d.innerHTML=html;log.appendChild(d);log.scrollTop=log.scrollHeight;return d;}
-  function blocks(content){let html="";const imgs=[];(function walk(b){if(!Array.isArray(b))return;for(const x of b){if(x.type==="text"&&x.text)html+="<div>"+esc(x.text).replace(/\n/g,"<br>")+"</div>";else if(x.type==="mcp_tool_use"||x.type==="tool_use")html+="<div class='tool'>\u21B3 "+esc(x.name||"tool")+"</div>";else if(x.type==="image"&&x.source&&x.source.data)imgs.push(x.source.data);else if(x.content)walk(x.content);}})(content);for(const d of imgs)html+="<img src='data:image/png;base64,"+d+"'/>";return html||"<div class='tool'>(no content)</div>";}
+
+  // ---- session store ----
+  let sessions=[];   // [{id,title,created,msgs:[{role,html,content}]}]
+  let currentId=null;
+  function loadSessions(){try{sessions=JSON.parse(localStorage.getItem(LS_KEY))||[];}catch(e){sessions=[];}}
+  function saveSessions(){try{localStorage.setItem(LS_KEY,JSON.stringify(sessions));}catch(e){}}
+  function cur(){return sessions.find(s=>s.id===currentId);}
+  function newSession(){const id="c"+Date.now();sessions.unshift({id,title:"New chat",created:Date.now(),msgs:[]});currentId=id;saveSessions();renderList();renderThread();}
+  function delSession(id){sessions=sessions.filter(s=>s.id!==id);if(currentId===id)currentId=sessions[0]?sessions[0].id:null;if(!currentId)newSession();else{saveSessions();renderList();renderThread();}}
+
+  function renderList(){
+    listEl.innerHTML=sessions.map(s=>{
+      const when=new Date(s.created).toLocaleDateString();
+      return `<div class="chatitem ${s.id===currentId?'active':''}" data-id="${s.id}">
+        <div class="ti">${esc(s.title||'New chat')}</div>
+        <div class="mt"><span>${s.msgs.filter(m=>m.role==='user').length} msgs · ${when}</span><span class="del" data-del="${s.id}">✕</span></div>
+      </div>`;}).join("")||'<div style="color:var(--muted);font-size:12px;padding:10px">No chats yet</div>';
+  }
+  listEl.onclick=e=>{
+    const del=e.target.closest("[data-del]");
+    if(del){e.stopPropagation();if(confirm("Delete this chat?"))delSession(del.getAttribute("data-del"));return;}
+    const it=e.target.closest(".chatitem");if(it){currentId=it.getAttribute("data-id");renderList();renderThread();}
+  };
+  newBtn.onclick=newSession;
+
+  // ---- rendering messages ----
+  function addDOM(role,html){const d=document.createElement("div");d.className="cmsg "+(role==="user"?"u":"a");d.innerHTML=html;log.appendChild(d);log.scrollTop=log.scrollHeight;return d;}
+  function renderThread(){
+    const s=cur();log.innerHTML="";
+    if(!s||!s.msgs.length){log.innerHTML='<div class="cmsg a">Ask me to run an eval, author a metric, or plot a trend. Try: "run faithfulness on a golden set", or "show the faithfulness trend".</div>';return;}
+    for(const m of s.msgs)addDOM(m.role,m.html);
+  }
+
+  // ---- turn assistant content blocks into HTML, parsing eval JSON into cards ----
+  let cardSeq=0;
+  function evalCardHTML(obj){
+    const cases=obj.per_case||[];const agg=obj.aggregate||{};
+    const metricNames=Object.keys(agg);
+    const anyFail=cases.some(c=>caseFail(c))||metricNames.some(m=>agg[m]&&agg[m].pass_rate!=null&&agg[m].pass_rate<1);
+    const verdict=anyFail?'<span class="everdict somefail">needs review</span>':'<span class="everdict allpass">all pass</span>';
+    const heat=cases.map(c=>{const s=cScore(c);const col=s==null?"#9CA3AF":(s>=0.7?"#15924F":(s>=0.4?"#D9A441":"#D5453B"));return `<div class="hc" style="background:${col}" title="${fm(s)}"></div>`;}).join("");
+    const aggLine=metricNames.map(m=>`${esc(m)} ${fm(agg[m]&&agg[m].mean_score)}`).join(" · ")||"eval";
+    const body=cases.map(c=>{
+      const m=cMetric(c);const s=cScore(c);const pass=!caseFail(c);
+      return `<div class="ecase">
+        <div class="eq"><span class="esc ${pass?'good':'bad'}">${fm(s)} ${pass?'PASS':'FAIL'}</span><span>${esc(c.input||'—')}</span></div>
+        <div class="ecols">
+          <div class="ecol"><div class="l">Context</div><div class="v">${esc(ctxOf(c))}</div></div>
+          <div class="ecol"><div class="l">Actual output</div><div class="v">${esc(c.actual_output||'—')}</div></div>
+          <div class="ecol why ${pass?'good':'bad'}"><div class="l">${esc((m&&m.name)||'score')} · why</div><div class="v">${esc((m&&m.reason)||'(no reason recorded)')}</div></div>
+        </div></div>`;
+    }).join("")||'<div class="ecase"><div class="v" style="color:var(--muted)">No per-case detail.</div></div>';
+    const id="ev"+(cardSeq++);
+    return `<div class="evalcard" id="${id}">
+      <div class="ehd" onclick="document.getElementById('${id}').classList.toggle('open')">
+        <span class="ecaret">▶</span>
+        <div class="etitle"><div class="ename">${esc(obj.golden_set||obj.run_id||'eval')}</div><div class="esub">${aggLine} · ${cases.length} cases</div></div>
+        ${verdict}
+      </div>
+      <div class="emini">${heat}</div>
+      <div class="ebody">${body}</div>
+    </div>`;
+  }
+  function cMetric(c){const sc=c&&c.scores?c.scores:{};const k=Object.keys(sc)[0];return k?{name:k,...sc[k]}:null;}
+  function cScore(c){const m=cMetric(c);return m&&typeof m.score==="number"?m.score:(typeof c.min_score==="number"?c.min_score:null);}
+  function caseFail(c){const m=cMetric(c);if(m&&typeof m.success==="boolean")return !m.success;const s=cScore(c);return s==null?false:s<0.7;}
+  function ctxOf(c){const rc=c.retrieval_context||c.context;return Array.isArray(rc)?rc.join(" • "):(rc||"—");}
+
+  function tryEvalJSON(text){
+    // detect a run_eval-style JSON object embedded in the text
+    const t=text.trim();
+    let obj=null;
+    try{obj=JSON.parse(t);}catch(e){
+      const m=t.match(/\{[\s\S]*\}/);if(m){try{obj=JSON.parse(m[0]);}catch(_){}}
+    }
+    if(obj&&(obj.per_case||obj.aggregate||obj.run_id))return obj;
+    return null;
+  }
+
+  function blocks(content){
+    let html="";const imgs=[];
+    (function walk(b){if(!Array.isArray(b))return;
+      for(const x of b){
+        if(x.type==="text"&&x.text){
+          const card=tryEvalJSON(x.text);
+          if(card)html+=evalCardHTML(card);
+          else html+="<div>"+esc(x.text).replace(/\n/g,"<br>")+"</div>";
+        } else if(x.type==="mcp_tool_use"||x.type==="tool_use"){
+          html+="<div class='tool'>↳ "+esc(x.name||"tool")+"</div>";
+        } else if(x.type==="mcp_tool_result"||x.type==="tool_result"){
+          // tool result may contain the eval JSON
+          const inner=(x.content||[]).map(p=>p&&p.text?p.text:"").join("\n");
+          const card=tryEvalJSON(inner);
+          if(card)html+=evalCardHTML(card);
+        } else if(x.type==="image"&&x.source&&x.source.data){imgs.push(x.source.data);}
+        else if(x.content)walk(x.content);
+      }
+    })(content);
+    for(const d of imgs)html+="<img src='data:image/png;base64,"+d+"'/>";
+    return html||"<div class='tool'>(no content)</div>";
+  }
+
+  // ---- send ----
   async function ask(){
-    const text=box.value.trim();if(!text)return;box.value="";add("user",esc(text));history.push({role:"user",content:text});
-    send.disabled=true;const p=add("assistant","<span class='tool'>thinking…</span>");
-    try{const h={"content-type":"application/json"};if(token)h["authorization"]="Bearer "+token;
-      const r=await fetch("/api/chat",{method:"POST",headers:h,body:JSON.stringify({messages:history})});const data=await r.json();
-      if(!r.ok){p.innerHTML="<span class='tool'>"+esc(data.error||("error "+r.status))+"</span>";if(r.status===503||r.status===401){note.classList.remove("hide");note.textContent=data.error||"chat unavailable";}send.disabled=false;return;}
-      p.innerHTML=blocks(data.content);const txt=(data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("\n");history.push({role:"assistant",content:txt||"(chart shown above)"});
-    }catch(e){p.innerHTML="<span class='tool'>"+esc(String(e))+"</span>";}
+    const text=box.value.trim();if(!text)return;box.value="";
+    let s=cur();if(!s){newSession();s=cur();}
+    if(s.title==="New chat")s.title=text.slice(0,40);
+    const uhtml=esc(text);addDOM("user",uhtml);s.msgs.push({role:"user",html:uhtml,content:text});saveSessions();renderList();
+    const apiHist=s.msgs.map(m=>({role:m.role,content:m.content}));
+    send.disabled=true;const p=addDOM("assistant","<span class='tool'>thinking…</span>");
+    try{
+      const h={"content-type":"application/json"};if(token)h["authorization"]="Bearer "+token;
+      const r=await fetch("/api/chat",{method:"POST",headers:h,body:JSON.stringify({messages:apiHist})});
+      const data=await r.json();
+      if(!r.ok){const em="<span class='tool'>"+esc(data.error||("error "+r.status))+"</span>";p.innerHTML=em;s.msgs.push({role:"assistant",html:em,content:"(error)"});saveSessions();if(r.status===503||r.status===401){note.classList.remove("hide");note.textContent=data.error||"chat unavailable";}send.disabled=false;return;}
+      const ahtml=blocks(data.content);p.innerHTML=ahtml;
+      const txt=(data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("\n");
+      s.msgs.push({role:"assistant",html:ahtml,content:txt||"(result shown above)"});saveSessions();
+      load(); // refresh dashboard/inspector since a new run may have landed
+    }catch(e){const em="<span class='tool'>"+esc(String(e))+"</span>";p.innerHTML=em;s.msgs.push({role:"assistant",html:em,content:"(error)"});saveSessions();}
     send.disabled=false;
   }
   send.onclick=ask;box.addEventListener("keydown",e=>{if(e.key==="Enter")ask();});
+
+  // ---- init ----
+  loadSessions();
+  if(!sessions.length)newSession();else{currentId=sessions[0].id;renderList();renderThread();}
 })();
 
 load();
