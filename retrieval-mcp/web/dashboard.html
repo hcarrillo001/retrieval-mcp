@@ -227,13 +227,13 @@
 
   <div class="side">
     <div class="collap" id="collapLatest">
-      <div class="ch" onclick="document.getElementById('collapLatest').classList.toggle('closed')"><span class="cv">▼</span> Latest run</div>
+      <div class="ch" onclick="document.getElementById('collapLatest').classList.toggle('closed')"><span class="cv">▼</span> This chat</div>
       <div class="cc">
         <div class="stat"><div class="l">Avg faithfulness</div><div class="n" id="sFaith">—</div></div>
         <div class="stat"><div class="l">Pass rate</div><div class="n" id="sPass" style="color:var(--pass)">—</div></div>
         <span class="h" style="margin-top:4px">Faithfulness trend</span>
         <svg id="spark" viewBox="0 0 210 78" style="width:100%"></svg>
-        <span class="h" style="margin-top:4px">Total runs</span>
+        <span class="h" style="margin-top:4px">Evals this chat</span>
         <div class="stat"><div class="n" id="sRuns" style="font-size:26px">—</div></div>
       </div>
     </div>
@@ -264,7 +264,8 @@ async function load(){
   document.getElementById("state").textContent=live?"live · Supabase":"sample data";
   if(!live)document.getElementById("dot").style.background="#B08A4A";
   runs=runs.slice().sort((a,b)=>a.timestamp<b.timestamp?-1:1);
-  renderSide(runs);renderDash(runs);renderRuns(runs);
+  renderDash(runs);renderRuns(runs);
+  if(window.renderChatSide)window.renderChatSide(); // side panel is per-chat
 }
 
 // ---- Run inspector ----
@@ -282,7 +283,7 @@ function renderRuns(runs){
   const failed=allCases.filter(c=>casePass(c)===false).length;
   const avgF=mean(runs.map(faith).filter(Boolean));
   document.getElementById("runSummary").innerHTML=
-    `<div class="sum"><div class="l">Total runs</div><div class="n">${runs.length}</div></div>`+
+    `<div class="sum"><div class="l">All runs</div><div class="n">${runs.length}</div></div>`+
     `<div class="sum"><div class="l">Cases passed</div><div class="n" style="color:var(--pass)">${passed}</div></div>`+
     `<div class="sum"><div class="l">Cases failed</div><div class="n" style="color:var(--fail)">${failed}</div></div>`+
     `<div class="sum"><div class="l">Avg faithfulness</div><div class="n">${fm(avgF)}</div></div>`;
@@ -320,23 +321,7 @@ function renderRuns(runs){
   }).join("") || `<div style="color:var(--muted)">No runs yet. Run an eval to see it here.</div>`;
 }
 
-function renderSide(runs){
-  const avgF=mean(runs.map(faith).filter(Boolean));
-  const pr=mean(runs.map(r=>r.aggregate&&r.aggregate.faithfulness&&r.aggregate.faithfulness.pass_rate).filter(v=>v!=null));
-  document.getElementById("sFaith").textContent=fm(avgF);
-  document.getElementById("sPass").textContent=Math.round(pr*100)+"%";
-  document.getElementById("sRuns").textContent=runs.length;
-  const last=runs.slice(-6),vals=last.map(faith);
-  const W=210,H=78,pad=8,n=vals.length;
-  const x=i=>pad+(n<=1?0:i*(W-2*pad)/(n-1));
-  const y=v=>8+(1-v)*(H-16);
-  let line="",pts="";
-  vals.forEach((v,i)=>{line+=(i?" ":"")+x(i).toFixed(1)+","+y(v).toFixed(1);});
-  vals.forEach((v,i)=>{const c=v>=0.7?"#15924F":"#D5453B";pts+=`<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="2.8" fill="${c}"/>`;});
-  document.getElementById("spark").innerHTML=
-    `<line x1="${pad}" y1="${y(0.7).toFixed(1)}" x2="${W-pad}" y2="${y(0.7).toFixed(1)}" stroke="#9CA3AF" stroke-width="1" stroke-dasharray="3 3"/>`+
-    `<polyline points="${line}" fill="none" stroke="#2563EB" stroke-width="2"/>`+pts;
-}
+
 
 let trendChart,modelChart;
 function renderDash(runs){
@@ -396,21 +381,22 @@ navChat.onclick=()=>show("chat");navDash.onclick=()=>show("dash");navRuns.onclic
   function loadSessions(){try{sessions=JSON.parse(localStorage.getItem(LS_KEY))||[];}catch(e){sessions=[];}}
   function saveSessions(){try{localStorage.setItem(LS_KEY,JSON.stringify(sessions));}catch(e){}}
   function cur(){return sessions.find(s=>s.id===currentId);}
-  function newSession(){const id="c"+Date.now();sessions.unshift({id,title:"New chat",created:Date.now(),msgs:[]});currentId=id;saveSessions();renderList();renderThread();}
+  function newSession(){const id="c"+Date.now();sessions.unshift({id,title:"New chat",created:Date.now(),msgs:[],evals:[]});currentId=id;saveSessions();renderList();renderThread();renderChatSide();}
   function delSession(id){sessions=sessions.filter(s=>s.id!==id);if(currentId===id)currentId=sessions[0]?sessions[0].id:null;if(!currentId)newSession();else{saveSessions();renderList();renderThread();}}
 
   function renderList(){
     listEl.innerHTML=sessions.map(s=>{
       const when=new Date(s.created).toLocaleDateString();
+      const ev=(s.evals||[]).length;
       return `<div class="chatitem ${s.id===currentId?'active':''}" data-id="${s.id}">
         <div class="ti">${esc(s.title||'New chat')}</div>
-        <div class="mt"><span>${s.msgs.filter(m=>m.role==='user').length} msgs · ${when}</span><span class="del" data-del="${s.id}">✕</span></div>
+        <div class="mt"><span>${ev} eval${ev===1?'':'s'} · ${when}</span><span class="del" data-del="${s.id}">✕</span></div>
       </div>`;}).join("")||'<div style="color:var(--muted);font-size:12px;padding:10px">No chats yet</div>';
   }
   listEl.onclick=e=>{
     const del=e.target.closest("[data-del]");
     if(del){e.stopPropagation();if(confirm("Delete this chat?"))delSession(del.getAttribute("data-del"));return;}
-    const it=e.target.closest(".chatitem");if(it){currentId=it.getAttribute("data-id");renderList();renderThread();}
+    const it=e.target.closest(".chatitem");if(it){currentId=it.getAttribute("data-id");renderList();renderThread();renderChatSide();}
   };
   newBtn.onclick=newSession;
 
@@ -491,6 +477,39 @@ navChat.onclick=()=>show("chat");navDash.onclick=()=>show("dash");navRuns.onclic
     return html||"<div class='tool'>(no content)</div>";
   }
 
+  // collect every eval object found in a response (text + tool_result blocks)
+  function extractEvals(content){
+    const found=[];
+    (function walk(b){if(!Array.isArray(b))return;
+      for(const x of b){
+        if(x.type==="text"&&x.text){const e=tryEvalJSON(x.text);if(e)found.push(e);}
+        else if(x.type==="mcp_tool_result"||x.type==="tool_result"){
+          const inner=(x.content||[]).map(p=>p&&p.text?p.text:"").join("\n");const e=tryEvalJSON(inner);if(e)found.push(e);
+        } else if(x.content)walk(x.content);
+      }
+    })(content);
+    return found;
+  }
+
+  // per-chat side panel: counts/stats scoped to the CURRENT conversation
+  function renderChatSide(){
+    const s=cur();const evals=(s&&s.evals)||[];
+    const fa=evals.map(faith).filter(v=>v!=null&&!isNaN(v));
+    const prs=evals.map(e=>e.aggregate&&e.aggregate.faithfulness&&e.aggregate.faithfulness.pass_rate).filter(v=>v!=null);
+    document.getElementById("sFaith").textContent=fa.length?fm(mean(fa)):"—";
+    document.getElementById("sPass").textContent=prs.length?Math.round(mean(prs)*100)+"%":"—";
+    document.getElementById("sRuns").textContent=evals.length;
+    const vals=fa.slice(-6),W=210,H=78,pad=8,n=vals.length;
+    const x=i=>pad+(n<=1?0:i*(W-2*pad)/(n-1)),y=v=>8+(1-v)*(H-16);
+    let line="",pts="";
+    vals.forEach((v,i)=>{line+=(i?" ":"")+x(i).toFixed(1)+","+y(v).toFixed(1);});
+    vals.forEach((v,i)=>{const c=v>=0.7?"#15924F":"#D5453B";pts+=`<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="2.8" fill="${c}"/>`;});
+    document.getElementById("spark").innerHTML = vals.length
+      ? `<line x1="${pad}" y1="${y(0.7).toFixed(1)}" x2="${W-pad}" y2="${y(0.7).toFixed(1)}" stroke="#9CA3AF" stroke-width="1" stroke-dasharray="3 3"/><polyline points="${line}" fill="none" stroke="#2563EB" stroke-width="2"/>${pts}`
+      : `<text x="105" y="42" text-anchor="middle" fill="#9CA3AF" font-size="11" font-family="JetBrains Mono">no evals yet</text>`;
+  }
+  window.renderChatSide=renderChatSide; // let load() refresh it too
+
   // ---- send ----
   async function ask(){
     const text=box.value.trim();if(!text)return;box.value="";
@@ -505,9 +524,19 @@ navChat.onclick=()=>show("chat");navDash.onclick=()=>show("dash");navRuns.onclic
       const data=await r.json();
       if(!r.ok){const em="<span class='tool'>"+esc(data.error||("error "+r.status))+"</span>";p.innerHTML=em;s.msgs.push({role:"assistant",html:em,content:"(error)"});saveSessions();if(r.status===503||r.status===401){note.classList.remove("hide");note.textContent=data.error||"chat unavailable";}send.disabled=false;return;}
       const ahtml=blocks(data.content);p.innerHTML=ahtml;
+      const evs=extractEvals(data.content);
+      if(evs.length){
+        s.evals=s.evals||[];
+        for(const e of evs){
+          const rid=e.run_id;
+          if(rid&&s.evals.some(x=>x.run_id===rid))continue; // dedupe by run_id
+          s.evals.push(e);
+        }
+      }
       const txt=(data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("\n");
       s.msgs.push({role:"assistant",html:ahtml,content:txt||"(result shown above)"});saveSessions();
-      load(); // refresh dashboard/inspector since a new run may have landed
+      renderList();renderChatSide();
+      load(); // refresh global dashboard/inspector since a new run may have landed
     }catch(e){const em="<span class='tool'>"+esc(String(e))+"</span>";p.innerHTML=em;s.msgs.push({role:"assistant",html:em,content:"(error)"});saveSessions();}
     send.disabled=false;
   }
@@ -515,7 +544,7 @@ navChat.onclick=()=>show("chat");navDash.onclick=()=>show("dash");navRuns.onclic
 
   // ---- init ----
   loadSessions();
-  if(!sessions.length)newSession();else{currentId=sessions[0].id;renderList();renderThread();}
+  if(!sessions.length)newSession();else{currentId=sessions[0].id;renderList();renderThread();renderChatSide();}
 })();
 
 load();
