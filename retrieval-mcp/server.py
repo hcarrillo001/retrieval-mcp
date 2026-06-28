@@ -23,7 +23,8 @@ from mcp.server.fastmcp import FastMCP, Image
 import metrics as M
 import history as H
 import charts as C
-from judge import judge_json, budget_status, reset_spend, BudgetExceeded
+from judge import (judge_json, budget_status, reset_spend, BudgetExceeded,
+                   judge_as, sandbox_models, SANDBOX_PRESETS)
 from goldensets import load_records
 
 mcp = FastMCP("retrieval-mcp")
@@ -31,6 +32,66 @@ mcp = FastMCP("retrieval-mcp")
 # in-memory state for the session
 GOLDEN_SETS: dict[str, list] = {}
 CUSTOM_METRICS: dict[str, list] = {}  # name -> evaluation_steps
+
+# Hard ceilings for the PUBLIC sandbox (defense-in-depth; the /api layer caps too)
+SANDBOX_MAX_CASES = int(os.environ.get("SANDBOX_MAX_CASES", "3"))
+SANDBOX_MAX_CHARS = int(os.environ.get("SANDBOX_MAX_CHARS", "2000"))
+SANDBOX_ALLOWED_METRICS = {"faithfulness", "answer_relevancy", "hallucination",
+                           "contextual_relevancy"}
+
+
+def run_sandbox_eval(cases: list, metric: str, model_id: str,
+                     threshold: float = 0.7) -> dict:
+    """Score raw cases with a chosen FREE judge model. Used by the public
+    sandbox HTTP route. Heavily bounded: few cases, capped text, allowlist
+    metrics, and the global budget cap still applies."""
+    if metric not in SANDBOX_ALLOWED_METRICS:
+        return {"error": "metric_not_allowed", "allowed": sorted(SANDBOX_ALLOWED_METRICS)}
+    if not isinstance(cases, list) or not cases:
+        return {"error": "no_cases"}
+    cases = cases[:SANDBOX_MAX_CASES]
+
+    def clip(v):
+        if isinstance(v, list):
+            return [str(x)[:SANDBOX_MAX_CHARS] for x in v][:8]
+        return str(v or "")[:SANDBOX_MAX_CHARS]
+
+    clean = []
+    for c in cases:
+        clean.append({
+            "input": clip(c.get("input")),
+            "actual_output": clip(c.get("actual_output")),
+            "expected_output": clip(c.get("expected_output")),
+            "retrieval_context": clip(c.get("retrieval_context") or c.get("context") or []),
+        })
+
+    full, scores = [], []
+    try:
+        with judge_as(model_id):
+            for i, case in enumerate(clean):
+                res = _run_metric(metric, case, threshold)
+                full.append({
+                    "index": i, "input": case["input"],
+                    "actual_output": case["actual_output"],
+                    "expected_output": case["expected_output"],
+                    "retrieval_context": case["retrieval_context"],
+                    "min_score": res["score"],
+                    "scores": {metric: {"score": res["score"], "success": res["success"],
+                                        "reason": res["reason"], "details": res["details"]}},
+                })
+                scores.append(res["score"])
+    except BudgetExceeded as e:
+        return {"error": "budget_exceeded", "message": str(e)}
+    except Exception as e:
+        return {"error": "judge_error", "message": str(e)[:300]}
+
+    aggregate = {metric: {
+        "mean_score": round(statistics.mean(scores), 4),
+        "pass_rate": round(sum(s >= threshold for s in scores) / len(scores), 4),
+        "n": len(scores)}}
+    return {"golden_set": "sandbox", "threshold": threshold,
+            "judge_model": SANDBOX_PRESETS.get(model_id, {}).get("model", model_id),
+            "aggregate": aggregate, "per_case": full, "total_cases": len(full)}
 
 
 def _run_metric(name: str, case: dict, threshold: float) -> dict:

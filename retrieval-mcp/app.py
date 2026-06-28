@@ -16,6 +16,8 @@ from starlette.routing import Route
 # 1) Relax FastMCP's DNS-rebinding host check BEFORE the app/session-manager is
 #    built (it reads this setting once, lazily, on first streamable_http_app()).
 from server import mcp  # noqa: E402
+from server import run_sandbox_eval  # noqa: E402
+from judge import sandbox_models  # noqa: E402
 
 try:
     from mcp.server.transport_security import TransportSecuritySettings
@@ -26,7 +28,8 @@ except Exception as _e:
     print(f"NOTE: could not set transport_security ({_e})")
 
 TOKEN = os.environ.get("RETRIEVAL_TOKEN", "")
-PUBLIC_PATHS = ("/healthz",)
+SANDBOX_SECRET = os.environ.get("SANDBOX_SECRET", "")
+PUBLIC_PATHS = ("/healthz", "/sandbox", "/sandbox/models")
 
 
 # 2) Belt-and-suspenders: normalize Host/Origin so the rebinding check (if any
@@ -63,11 +66,37 @@ async def healthz(_request):
     return PlainTextResponse("ok")
 
 
+async def sandbox_models_route(_request):
+    return JSONResponse({"models": sandbox_models()})
+
+
+async def sandbox_route(request):
+    # server-to-server only: the Vercel /api/sandbox holds this secret and does
+    # the per-IP rate limiting. Reject direct public hits.
+    if not SANDBOX_SECRET or request.headers.get("x-sandbox-secret", "") != SANDBOX_SECRET:
+        return JSONResponse({"error": "forbidden"}, status_code=403)
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "bad_json"}, status_code=400)
+    cases = body.get("cases")
+    metric = body.get("metric", "faithfulness")
+    model = body.get("model", "")
+    result = run_sandbox_eval(cases or [], metric, model)
+    if isinstance(result, dict) and result.get("error") == "budget_exceeded":
+        return JSONResponse(result, status_code=429)
+    if isinstance(result, dict) and result.get("error"):
+        return JSONResponse(result, status_code=400)
+    return JSONResponse(result)
+
+
 app = mcp.streamable_http_app()
 # order matters: auth runs first (outermost), then host normalization
 app.add_middleware(NormalizeHost)
 app.add_middleware(BearerAuth)
 app.router.routes.append(Route("/healthz", healthz, methods=["GET"]))
+app.router.routes.append(Route("/sandbox", sandbox_route, methods=["POST"]))
+app.router.routes.append(Route("/sandbox/models", sandbox_models_route, methods=["GET"]))
 
 
 if __name__ == "__main__":

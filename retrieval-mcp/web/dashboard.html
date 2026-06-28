@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>RetriEval — dashboard</title>
+<title>retriEVAL — dashboard</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@700&display=swap" rel="stylesheet">
@@ -231,7 +231,7 @@
 
   <div class="main">
     <div class="mhd">
-      <span class="t" id="mainTitle">Ask RetriEval</span>
+      <span class="t" id="mainTitle">Ask retriEVAL</span>
       <span class="s"><span class="dot" id="dot"></span><span id="state">loading…</span></span>
     </div>
 
@@ -395,7 +395,7 @@ function show(view){
   navChat.classList.toggle("active",isChat);
   navDash.classList.toggle("active",isDash);
   navRuns.classList.toggle("active",isRuns);
-  document.getElementById("mainTitle").textContent=isChat?"Ask RetriEval":(isRuns?"Run inspector":"Dashboard");
+  document.getElementById("mainTitle").textContent=isChat?"Ask retriEVAL":(isRuns?"Run inspector":"Dashboard");
 }
 navChat.onclick=()=>show("chat");navDash.onclick=()=>show("dash");navRuns.onclick=()=>show("runs");
 

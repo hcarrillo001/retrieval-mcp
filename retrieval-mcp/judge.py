@@ -20,8 +20,95 @@ from __future__ import annotations
 import os
 import re
 import json
+import contextvars
 
 from paths import home
+
+# ---- Sandbox judge presets --------------------------------------------------
+# Swappable FREE models for the public sandbox. Keys live ONLY on the server
+# (set the *_key_env var on Railway); the browser only ever sends the short id.
+# All are OpenAI-compatible endpoints, so they run through the _openai backend.
+SANDBOX_PRESETS = {
+    "groq-llama": {
+        "label": "Llama 3.3 70B · via Groq (free)",
+        "base_url": "https://api.groq.com/openai/v1",
+        "key_env": "GROQ_API_KEY",
+        "model": "llama-3.3-70b-versatile",
+    },
+    "gemini-flash": {
+        "label": "Gemini 2.5 Flash · Google (free)",
+        "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+        "key_env": "GEMINI_API_KEY",
+        "model": "gemini-2.5-flash",
+    },
+    "qwen-72b": {
+        "label": "Qwen 2.5 72B · via OpenRouter (free)",
+        "base_url": "https://openrouter.ai/api/v1",
+        "key_env": "OPENROUTER_API_KEY",
+        "model": "qwen/qwen-2.5-72b-instruct:free",
+    },
+    "deepseek": {
+        # DeepSeek (Chinese) via OpenRouter's free slot — same OPENROUTER_API_KEY as
+        # Qwen. VERIFY the current free slug on openrouter.ai (free model ids churn,
+        # e.g. deepseek/deepseek-r1:free or deepseek/deepseek-chat-v3-0324:free).
+        # DeepSeek also has a cheap (not free) direct API at https://api.deepseek.com
+        # with model "deepseek-chat" if you'd rather have reliability over a free tier.
+        "label": "DeepSeek V3 · via OpenRouter (free)",
+        "base_url": "https://openrouter.ai/api/v1",
+        "key_env": "OPENROUTER_API_KEY",
+        "model": "deepseek/deepseek-chat-v3-0324:free",
+    },
+    "ollama-cloud": {
+        # Ollama Cloud's OpenAI-compatible endpoint. VERIFY the exact base URL and
+        # model id at docs.ollama.com/cloud (host may be ollama.com/v1 vs
+        # api.ollama.com/v1; lighter models like gpt-oss:20b stretch the free quota).
+        "label": "gpt-oss 20B · Ollama Cloud (free)",
+        "base_url": "https://ollama.com/v1",
+        "key_env": "OLLAMA_API_KEY",
+        "model": "gpt-oss:20b",
+    },
+}
+DEFAULT_SANDBOX_MODEL = os.environ.get("SANDBOX_DEFAULT_MODEL", "groq-llama")
+
+# per-call override: {"base_url","key","model"} set for the duration of one eval
+_override: "contextvars.ContextVar[dict|None]" = contextvars.ContextVar(
+    "judge_override", default=None)
+
+
+def sandbox_models() -> list[dict]:
+    """Public list of selectable models (id + label only — no keys/urls)."""
+    out = []
+    for mid, p in SANDBOX_PRESETS.items():
+        out.append({"id": mid, "label": p["label"],
+                    "available": bool(os.environ.get(p["key_env"], ""))})
+    return out
+
+
+class judge_as:
+    """Context manager: route judge calls through a sandbox preset for this call.
+        with judge_as("groq-llama"):
+            run the metrics...
+    """
+    def __init__(self, model_id: str):
+        self.model_id = model_id or DEFAULT_SANDBOX_MODEL
+        self._token = None
+
+    def __enter__(self):
+        p = SANDBOX_PRESETS.get(self.model_id)
+        if not p:
+            raise ValueError(f"unknown sandbox model '{self.model_id}'")
+        key = os.environ.get(p["key_env"], "")
+        if not key:
+            raise RuntimeError(f"model '{self.model_id}' not configured "
+                               f"(missing {p['key_env']})")
+        self._token = _override.set(
+            {"base_url": p["base_url"], "key": key, "model": p["model"]})
+        return self
+
+    def __exit__(self, *exc):
+        if self._token is not None:
+            _override.reset(self._token)
+        return False
 
 # Approximate USD per 1M tokens (input, output). Editable via env; verify against
 # current Anthropic pricing for your chosen model.
@@ -139,23 +226,31 @@ def _ollama(system: str, user: str, max_tokens: int = 1024) -> str:
 def _openai(system: str, user: str, max_tokens: int = 1024) -> str:
     """OpenAI-compatible Chat Completions. Works with OpenAI and any compatible
     endpoint (OpenRouter, Together, a local vLLM, etc.) via OPENAI_BASE_URL —
-    so users can bring whatever LLM they want with their own key."""
+    so users can bring whatever LLM they want with their own key.
+    If a per-call sandbox override is active, use its endpoint/key/model."""
     import urllib.request
 
-    base = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
-    key = os.environ.get("OPENAI_API_KEY", "")
-    model = os.environ.get("RETRIEVAL_JUDGE_MODEL", "gpt-4o")
+    ov = _override.get()
+    if ov:
+        base, key, model = ov["base_url"].rstrip("/"), ov["key"], ov["model"]
+    else:
+        base = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
+        key = os.environ.get("OPENAI_API_KEY", "")
+        model = os.environ.get("RETRIEVAL_JUDGE_MODEL", "gpt-4o")
     payload = {"model": model, "max_tokens": max_tokens,
                "messages": [{"role": "system", "content": system},
                             {"role": "user", "content": user}]}
     req = urllib.request.Request(
         base + "/chat/completions", data=json.dumps(payload).encode(),
         headers={"Content-Type": "application/json", "Authorization": f"Bearer {key}"})
-    with urllib.request.urlopen(req) as r:
+    with urllib.request.urlopen(req, timeout=60) as r:
         return json.loads(r.read())["choices"][0]["message"]["content"]
 
 
 def get_judge():
+    # an active sandbox override always routes through the OpenAI-compatible path
+    if _override.get():
+        return _openai
     backend = (os.environ.get("RETRIEVAL_JUDGE_BACKEND")
                or os.environ.get("TOUCHSTONE_JUDGE_BACKEND", "anthropic")).lower()
     return {"ollama": _ollama, "openai": _openai}.get(backend, _anthropic)

@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>retriEVAL · Live sandbox</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#18181B;--muted:#71717A;--faint:#A1A1AA;--line:#E4E4E7;--card:#FFFFFF;--paper:#FAFAFA;--soft:#F4F4F5;
+    --blue:#2563EB;--blue-soft:#EFF4FE;
+    --pass:#059669;--pass-soft:#ECFDF5;--pass-ink:#047857;
+    --fail:#E11D48;--fail-soft:#FFF1F3;--fail-ink:#BE123C;--warn:#D97706;
+    --mono:"JetBrains Mono",ui-monospace,monospace;--ui:"Inter",system-ui,sans-serif;--display:"Space Grotesk",sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:var(--ui);color:var(--ink);background:linear-gradient(180deg,#fff,var(--paper));min-height:100vh;}
+  .wrap{max-width:680px;margin:0 auto;padding:40px 20px 60px;}
+  .hero{text-align:center;margin-bottom:22px;}
+  .badge{display:inline-flex;align-items:center;gap:6px;background:var(--blue-soft);color:var(--blue);font-size:12px;font-weight:500;padding:5px 12px;border-radius:99px;}
+  .badge .dot{width:6px;height:6px;border-radius:50%;background:var(--blue);}
+  h1{font-family:var(--display);font-size:25px;margin:14px 0 6px;font-weight:600;}
+  .sub{color:var(--muted);font-size:14px;margin:0;}
+  .panel{background:var(--card);border:0.5px solid var(--line);border-radius:14px;padding:18px;}
+  .lbl{font-size:11px;font-weight:600;color:var(--faint);text-transform:uppercase;letter-spacing:.05em;margin-bottom:9px;}
+  .chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;}
+  .chip{border:0.5px solid var(--line);background:var(--card);color:var(--ink);font-size:13px;padding:7px 13px;border-radius:9px;cursor:pointer;font-family:inherit;}
+  .chip.on{border-color:var(--blue);background:var(--blue-soft);color:var(--blue);font-weight:500;}
+  .chip.dim{color:var(--muted);}
+  select{font-family:inherit;font-size:13px;padding:8px 11px;border:0.5px solid var(--line);border-radius:9px;background:var(--card);color:var(--ink);width:100%;}
+  .run{width:100%;border:none;background:var(--blue);color:#fff;font-size:14px;font-weight:500;padding:12px;border-radius:10px;cursor:pointer;font-family:inherit;margin-top:4px;}
+  .run:disabled{opacity:.6;cursor:default;}
+  .foot{text-align:center;font-size:11.5px;color:var(--faint);margin:11px 0 0;}
+  .custom{margin-bottom:16px;}
+  .custom textarea{width:100%;font-family:inherit;font-size:13px;padding:9px 11px;border:0.5px solid var(--line);border-radius:9px;resize:vertical;min-height:46px;color:var(--ink);margin-bottom:7px;}
+  details{margin-bottom:14px;}
+  summary{cursor:pointer;font-size:12.5px;color:var(--blue);}
+  .spin{width:26px;height:26px;border:2.5px solid var(--soft);border-top-color:var(--blue);border-radius:50%;margin:0 auto 12px;animation:sp .7s linear infinite;}
+  @keyframes sp{to{transform:rotate(360deg);}}
+  .loading{text-align:center;padding:34px 0;color:var(--muted);font-size:13px;}
+  .hide{display:none;}
+  /* result card */
+  .card{border:0.5px solid var(--line);border-radius:14px;overflow:hidden;}
+  .chd{display:flex;align-items:center;gap:11px;padding:13px 15px;border-bottom:0.5px solid var(--line);}
+  .cic{width:30px;height:30px;border-radius:9px;background:var(--blue-soft);color:var(--blue);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .cic svg{width:16px;height:16px;}
+  .verd{font-size:11.5px;font-weight:600;padding:4px 11px;border-radius:99px;}
+  .verd.pass{background:var(--pass-soft);color:var(--pass-ink);}
+  .verd.fail{background:var(--fail-soft);color:var(--fail-ink);}
+  .mtr{padding:13px 15px;border-bottom:0.5px solid var(--line);}
+  .mname{font-size:12px;color:var(--muted);}
+  .mval{font-family:var(--display);font-size:22px;font-variant-numeric:tabular-nums;line-height:1;}
+  .trk{position:relative;height:7px;background:var(--soft);border-radius:99px;overflow:hidden;margin-top:8px;}
+  .fill{position:absolute;left:0;top:0;bottom:0;border-radius:99px;}
+  .thr{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--faint);}
+  .case{border-bottom:0.5px solid var(--line);}
+  .ch{display:flex;align-items:center;gap:10px;padding:12px 15px;cursor:pointer;}
+  .ch:hover{background:var(--paper);}
+  .q{font-size:13px;font-weight:500;flex:1;min-width:0;}
+  .caret{color:var(--faint);font-size:11px;transition:transform .15s;}
+  .case.open .caret{transform:rotate(90deg);}
+  .cbody{display:none;padding:0 15px 14px;}
+  .case.open .cbody{display:block;}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:10px;}
+  .col{background:var(--paper);border:0.5px solid var(--line);border-radius:10px;padding:10px 11px;min-width:0;}
+  .col .l{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--faint);margin-bottom:6px;}
+  .col .v{font-size:12.5px;line-height:1.5;overflow-wrap:anywhere;}
+  .why{font-size:12.5px;line-height:1.55;padding:9px 11px;border-radius:9px;}
+  .why.pass{background:var(--pass-soft);color:var(--pass-ink);}
+  .why.fail{background:var(--fail-soft);color:var(--fail-ink);}
+  .pill{font-family:var(--mono);font-size:11.5px;font-weight:700;padding:3px 9px;border-radius:7px;flex-shrink:0;}
+  .pill.pass{background:var(--pass-soft);color:var(--pass-ink);}
+  .pill.fail{background:var(--fail-soft);color:var(--fail-ink);}
+  .calc{margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;}
+  .cchip{font-family:var(--mono);font-size:10.5px;padding:3px 8px;border-radius:6px;background:var(--soft);color:var(--muted);}
+  .cchip.bad{background:var(--fail-soft);color:var(--fail-ink);}
+  .actions{padding:13px 15px;display:flex;gap:9px;}
+  .actions button{flex:1;border:0.5px solid var(--line);background:var(--card);color:var(--ink);font-size:13px;padding:9px;border-radius:9px;cursor:pointer;font-family:inherit;}
+  .err{padding:16px;color:var(--fail-ink);background:var(--fail-soft);border-radius:10px;font-size:13px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hero">
+    <span class="badge"><span class="dot"></span>Live sandbox</span>
+    <h1>See an eval run, end to end</h1>
+    <p class="sub">Pick a sample (or paste your own), run it against a free model, watch retriEVAL score it. No signup.</p>
+  </div>
+
+  <div class="panel" id="setup">
+    <div class="lbl">1 · Choose a sample</div>
+    <div class="chips" id="samples">
+      <button class="chip on" data-s="halluc">Hallucination</button>
+      <button class="chip" data-s="clean">All-pass</button>
+      <button class="chip" data-s="mixed">Mixed (3 cases)</button>
+      <button class="chip dim" data-s="custom">Paste your own</button>
+    </div>
+
+    <div class="custom hide" id="customBox">
+      <textarea id="cInput" placeholder="Question / input"></textarea>
+      <textarea id="cContext" placeholder="Retrieved context — simulates your RAG retrieval step"></textarea>
+      <textarea id="cOutput" placeholder="Model output (what the system answered)"></textarea>
+    </div>
+
+    <div class="lbl">2 · Metric</div>
+    <div class="chips" id="metrics">
+      <button class="chip on" data-m="faithfulness">faithfulness</button>
+      <button class="chip dim" data-m="answer_relevancy">answer_relevancy</button>
+      <button class="chip dim" data-m="hallucination">hallucination</button>
+    </div>
+
+    <div class="lbl">3 · Judge model</div>
+    <select id="model" style="margin-bottom:16px">
+      <option value="groq-llama">Llama 3.3 70B · via Groq (free)</option>
+      <option value="gemini-flash">Gemini 2.5 Flash · Google (free)</option>
+      <option value="qwen-72b">Qwen 2.5 72B · via OpenRouter (free)</option>
+      <option value="deepseek">DeepSeek V3 · via OpenRouter (free)</option>
+      <option value="ollama-cloud">gpt-oss 20B · Ollama Cloud (free)</option>
+    </select>
+
+    <button class="run" id="runBtn">Run sample eval</button>
+    <p class="foot" id="foot">Runs on a free model · nothing is saved · limited per day</p>
+  </div>
+
+  <div class="loading hide" id="loading"><div class="spin"></div>Scoring with the judge model…</div>
+  <div id="result"></div>
+</div>
+
+<script>
+(function(){
+  var RULER='<svg viewBox="0 0 24 24" fill="none"><path d="M3 8h18v8H3z" stroke="currentColor" stroke-width="1.8"/><path d="M7 8v3M11 8v4M15 8v3M19 8v4" stroke="currentColor" stroke-width="1.6"/></svg>';
+  var sample="halluc", metric="faithfulness";
+  var esc=function(s){return String(s==null?"":s).replace(/[&<>]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;"}[c];});};
+  var fm=function(n){return n==null?"—":Number(n).toFixed(2);};
+
+  function pickChip(group,attr,setter){
+    group.querySelectorAll(".chip").forEach(function(b){
+      b.onclick=function(){
+        group.querySelectorAll(".chip").forEach(function(x){x.classList.remove("on");x.classList.add("dim");});
+        b.classList.add("on");b.classList.remove("dim");
+        setter(b.getAttribute(attr));
+      };
+    });
+  }
+  pickChip(document.getElementById("samples"),"data-s",function(v){
+    sample=v;document.getElementById("customBox").classList.toggle("hide",v!=="custom");
+    document.getElementById("runBtn").textContent=v==="custom"?"Run my eval":"Run sample eval";
+  });
+  pickChip(document.getElementById("metrics"),"data-m",function(v){metric=v;});
+
+  function calcChips(details){
+    if(!details||typeof details!=="object")return "";
+    var chips=[];
+    Object.keys(details).forEach(function(k){
+      var v=details[k];
+      if(Array.isArray(v)){if(!v.length)return;chips.push('<span class="cchip bad"><b>'+v.length+'</b> '+esc(k.replace(/_/g," "))+'</span>');
+        v.slice(0,3).forEach(function(it){chips.push('<span class="cchip bad">'+esc(String(it)).slice(0,70)+'</span>');});}
+      else if(typeof v==="number")chips.push('<span class="cchip">'+esc(k.replace(/_/g," "))+' <b>'+v+'</b></span>');
+    });
+    return chips.length?'<div class="calc">'+chips.join("")+'</div>':"";
+  }
+
+  function render(data){
+    var agg=data.aggregate||{},cases=data.per_case||[],thr=data.threshold||0.7;
+    var mname=Object.keys(agg)[0]||metric, a=agg[mname]||{}, mean=a.mean_score;
+    var anyFail=cases.some(function(c){var sc=(c.scores||{})[mname]||{};return sc.success===false;});
+    var tcol=mean>=thr?"var(--pass-ink)":"var(--fail-ink)";
+    var col=mean>=thr?"var(--pass)":(mean>=0.4?"var(--warn)":"var(--fail)");
+    var pct=Math.max(2,Math.round((mean||0)*100));
+    var body=cases.map(function(c,i){
+      var sc=(c.scores||{})[mname]||{};var pass=sc.success!==false;
+      var ctx=Array.isArray(c.retrieval_context)?c.retrieval_context.join(" • "):(c.retrieval_context||"—");
+      return '<div class="case" id="cs'+i+'"><div class="ch" onclick="document.getElementById(\'cs'+i+'\').classList.toggle(\'open\')">'+
+        '<span class="pill '+(pass?'pass':'fail')+'">'+fm(sc.score)+' '+(pass?'pass':'fail')+'</span>'+
+        '<span class="q">'+esc(c.input||"—")+'</span><span class="caret">▶</span></div>'+
+        '<div class="cbody"><div class="cols">'+
+          '<div class="col"><div class="l">Retrieved context · RAG simulation</div><div class="v">'+esc(ctx)+'</div></div>'+
+          '<div class="col"><div class="l">Model output</div><div class="v">'+esc(c.actual_output||"—")+'</div></div>'+
+        '</div><div class="why '+(pass?'pass':'fail')+'">'+esc(sc.reason||"(no explanation)")+'</div>'+calcChips(sc.details)+'</div></div>';
+    }).join("");
+    var rem=(typeof data.remaining_today==="number")?(" · "+data.remaining_today+" runs left today"):"";
+    document.getElementById("result").innerHTML=
+      '<div class="card"><div class="chd"><span class="cic">'+RULER+'</span>'+
+      '<div style="flex:1"><div style="font-weight:600;font-size:13.5px">'+esc(mname)+'</div>'+
+      '<div style="font-size:11px;color:var(--faint);margin-top:2px">threshold '+fm(thr)+' · '+cases.length+' case'+(cases.length===1?'':'s')+' · '+esc(data.judge_model||"")+'</div></div>'+
+      '<span class="verd '+(anyFail?'fail':'pass')+'">'+(anyFail?'Needs review':'All pass')+'</span></div>'+
+      '<div class="mtr"><span class="mname">Mean '+esc(mname)+'</span> <span class="mval" style="color:'+tcol+'">'+fm(mean)+'</span>'+
+      '<div class="trk"><div class="fill" style="width:'+pct+'%;background:'+col+'"></div><div class="thr" style="left:'+Math.round(thr*100)+'%"></div></div></div>'+
+      body+
+      '<div class="actions"><button id="again">Run another sample</button><button id="reset">New run (clears)</button></div></div>';
+    document.getElementById("foot").textContent="Nothing is saved"+rem;
+    document.getElementById("again").onclick=back;
+    document.getElementById("reset").onclick=back;
+  }
+
+  function back(){document.getElementById("result").innerHTML="";document.getElementById("setup").classList.remove("hide");}
+
+  document.getElementById("runBtn").onclick=async function(){
+    var payload={metric:metric,model:document.getElementById("model").value};
+    if(sample==="custom"){
+      payload.cases=[{input:document.getElementById("cInput").value,
+        retrieval_context:[document.getElementById("cContext").value],
+        actual_output:document.getElementById("cOutput").value}];
+      if(!payload.cases[0].input&&!payload.cases[0].actual_output){alert("Add an input and a model output to score.");return;}
+    } else { payload.sample=sample; }
+    document.getElementById("setup").classList.add("hide");
+    document.getElementById("loading").classList.remove("hide");
+    document.getElementById("result").innerHTML="";
+    try{
+      var r=await fetch("/api/sandbox",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(payload)});
+      var data=await r.json();
+      document.getElementById("loading").classList.add("hide");
+      if(!r.ok){document.getElementById("result").innerHTML='<div class="err">'+esc(data.message||data.error||("error "+r.status))+'</div>'+
+        '<div class="actions" style="border:0.5px solid var(--line);border-radius:10px;margin-top:10px"><button id="reset2">Back</button></div>';
+        var b=document.getElementById("reset2");if(b)b.onclick=function(){document.getElementById("result").innerHTML="";document.getElementById("setup").classList.remove("hide");};return;}
+      render(data);
+    }catch(e){
+      document.getElementById("loading").classList.add("hide");
+      document.getElementById("result").innerHTML='<div class="err">'+esc(String(e))+'</div>';
+    }
+  };
+})();
+</script>
+</body>
+</html>
