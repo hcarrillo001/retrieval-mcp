@@ -24,7 +24,11 @@ JudgeJSON = Callable[..., dict]
 
 _SYS = (
     "You are a meticulous evaluation judge. Think through the rubric step by step, "
-    "then output ONLY a single JSON object. No prose outside the JSON."
+    "then output ONLY a single JSON object. No prose outside the JSON. "
+    'The "reasoning" field must explain WHY the score came out as it did, in one or '
+    "two sentences, naming the specific claims or facts that drove it (for example: "
+    "'The answer says fourteen regions, but the context lists six'). Never restate "
+    "the task, the rubric, or the scoring formula in that field."
 )
 
 
