@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>retriEVAL: evals for AI systems, as an MCP</title>
+<meta name="description" content="A local-first LLM-evaluation MCP server. Score RAG by stage (retriever vs generator), author metrics in plain language, track history and charts. Works inside Claude, Cursor, or CI.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#1A1A1E;--muted:#8A8F98;--line:#EAEAEC;--paper:#FAFAFB;--card:#FFF;--soft:#F2F2F4;
+    --pass:#15924F;--pass-soft:rgba(21,146,79,.10);--fail:#D5453B;
+    --m3:#2563EB;--m4:#60A5FA;--blue:#2563EB;--blue-soft:#DBE7FF;
+    --mono:"JetBrains Mono",ui-monospace,monospace;--ui:"Inter",system-ui,sans-serif;--display:"Space Grotesk",sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--ui);line-height:1.6;font-size:15px;}
+  a{color:inherit;}
+  .wrap{max-width:1000px;margin:0 auto;padding:0 22px;}
+
+  /* nav */
+  .nav{position:sticky;top:0;z-index:10;background:rgba(250,250,251,.85);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);}
+  .nav .row{display:flex;align-items:center;justify-content:space-between;height:60px;}
+  .brand{display:flex;align-items:center;gap:10px;text-decoration:none;}
+  .brand svg{height:26px;width:26px;color:var(--ink);}
+  .wordmark{font-family:var(--display);font-weight:700;font-size:20px;letter-spacing:-.02em;color:var(--muted);}
+  .wordmark .e{color:var(--blue);}
+  .navlinks{display:flex;gap:6px;align-items:center;font-family:var(--mono);font-size:13px;}
+  .navlinks a{padding:7px 11px;border-radius:7px;color:var(--muted);text-decoration:none;}
+  .navlinks a:hover{color:var(--ink);background:var(--soft);}
+  .navlinks a.cta{background:var(--blue);color:#fff;}
+  @media(max-width:640px){.navlinks a.hideSm{display:none;}}
+
+  /* hero */
+  .hero{padding:74px 0 30px;}
+  .badge{font-family:var(--mono);font-size:12px;color:var(--blue);background:var(--blue-soft);border:1px solid transparent;border-radius:999px;padding:5px 12px 5px 11px;display:inline-flex;align-items:center;gap:7px;}
+  .badge::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--blue);display:inline-block;}
+  h1{font-family:var(--display);font-weight:700;font-size:clamp(34px,6vw,56px);line-height:1.04;letter-spacing:-.02em;margin:18px 0 14px;}
+  h1 .grey{color:var(--muted);}
+  h1 .accent{color:var(--blue);}
+  .sub{font-size:18px;color:#3a4047;max-width:60ch;margin:0 0 26px;}
+  .btns{display:flex;gap:12px;flex-wrap:wrap;}
+  .btn{font-family:var(--mono);font-size:14px;text-decoration:none;padding:11px 18px;border-radius:9px;border:1px solid var(--line);background:var(--card);color:var(--ink);}
+  .btn.primary{background:var(--blue);color:#fff;border-color:var(--blue);}
+  .btn:hover{transform:translateY(-1px);}
+
+  /* flow diagram */
+  .flow{margin:40px 0 8px;border:1px solid var(--line);border-radius:14px;background:var(--card);padding:22px;box-shadow:0 1px 2px rgba(0,0,0,.04);}
+  .flow .cap{font-family:var(--mono);font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:12px;}
+  .steps{display:flex;align-items:stretch;gap:10px;flex-wrap:wrap;}
+  .step{flex:1;min-width:130px;border:1px solid var(--line);border-radius:10px;padding:12px 13px;background:var(--paper);}
+  .step .n{font-family:var(--mono);font-size:10px;color:var(--muted);}
+  .step .t{font-weight:600;font-size:14px;margin-top:3px;}
+  .step .d{font-size:12.5px;color:var(--muted);margin-top:3px;}
+  .arrow{align-self:center;color:var(--muted);font-family:var(--mono);}
+  @media(max-width:640px){.arrow{display:none;}}
+
+  /* sections */
+  section{padding:52px 0;border-top:1px solid var(--line);}
+  h2{font-family:var(--display);font-weight:600;font-size:28px;letter-spacing:-.01em;margin:0 0 8px;}
+  .lead{color:#3a4047;max-width:62ch;margin:0 0 28px;}
+  .feats{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;}
+  @media(max-width:640px){.feats{grid-template-columns:1fr;}}
+  .feat{border:1px solid var(--line);border-radius:11px;padding:18px;background:var(--card);}
+  .feat h3{margin:0 0 6px;font-size:15px;}
+  .feat p{margin:0;color:var(--muted);font-size:13.5px;}
+  .feat .tag{font-family:var(--mono);font-size:10px;color:var(--m3);text-transform:uppercase;letter-spacing:.08em;}
+
+  pre{background:#15171C;color:#EDEDEF;border-radius:11px;padding:16px 18px;overflow:auto;font-family:var(--mono);font-size:13px;line-height:1.7;position:relative;}
+  pre .c{color:#7A8089;}
+  .copy{position:absolute;top:10px;right:10px;font-family:var(--mono);font-size:11px;color:#9aa0a8;background:#23262E;border:0;border-radius:6px;padding:5px 9px;cursor:pointer;}
+  .copy:hover{color:#fff;}
+  .twocol{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  @media(max-width:640px){.twocol{grid-template-columns:1fr;}}
+  .colh{font-family:var(--mono);font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;}
+
+  table{width:100%;border-collapse:collapse;font-size:13.5px;}
+  th,td{text-align:left;padding:10px 8px;border-bottom:1px solid var(--line);}
+  th{font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:500;}
+  td .yes{color:var(--pass);font-weight:600;}
+  td .no{color:var(--muted);}
+
+  footer{border-top:1px solid var(--line);padding:30px 0 50px;color:var(--muted);font-family:var(--mono);font-size:12.5px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;}
+  footer a{color:var(--muted);text-decoration:none;margin-right:14px;}
+  footer a:hover{color:var(--ink);}
+  /* mock UI */
+  .mock{border:1px solid var(--line);border-radius:12px;background:var(--card);overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.05);}
+  .mock-bar{display:flex;align-items:center;gap:6px;padding:9px 12px;border-bottom:1px solid var(--line);background:var(--soft);}
+  .mock-bar i{width:9px;height:9px;border-radius:50%;background:#D7D7DB;display:inline-block;}
+  .mock-bar span{font-family:var(--mono);font-size:11px;color:var(--muted);margin-left:6px;}
+  .mock-body{padding:14px;}
+  .connrow{display:flex;align-items:center;justify-content:space-between;padding:11px 6px;border-bottom:1px solid var(--line);}
+  .connrow:last-child{border-bottom:0;}
+  .connrow .l{display:flex;align-items:center;gap:10px;font-size:13.5px;}
+  .connrow .ic{width:24px;height:24px;border-radius:7px;background:var(--soft);display:flex;align-items:center;justify-content:center;}
+  .connrow .ic svg{width:14px;height:14px;color:var(--ink);}
+  .tog{width:34px;height:20px;border-radius:999px;background:#D7D7DB;position:relative;flex:none;}
+  .tog.on{background:var(--pass);}
+  .tog::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:.2s;}
+  .tog.on::after{left:16px;}
+  .muted-s{font-family:var(--mono);font-size:10.5px;color:var(--muted);}
+  .chat{display:flex;flex-direction:column;gap:10px;}
+  .msg{max-width:90%;padding:10px 12px;border-radius:12px;font-size:13.5px;}
+  .msg.user{align-self:flex-end;background:var(--ink);color:#fff;border-bottom-right-radius:4px;}
+  .msg.bot{align-self:flex-start;background:var(--soft);border-bottom-left-radius:4px;width:100%;}
+  .scorerow{display:flex;align-items:center;gap:10px;margin:7px 0;}
+  .scorerow .nm{font-family:var(--mono);font-size:12px;width:128px;}
+  .track{flex:1;height:9px;border-radius:999px;background:#E4E4E7;overflow:hidden;}
+  .fill{height:100%;border-radius:999px;background:var(--pass);display:block;}
+  .scorerow .v{font-family:var(--mono);font-size:12px;font-weight:700;width:32px;text-align:right;}
+  .pill{font-family:var(--mono);font-size:10px;font-weight:700;padding:2px 7px;border-radius:999px;background:var(--pass-soft);color:var(--pass);}
+  .spark{display:flex;align-items:flex-end;gap:4px;height:38px;margin-top:5px;}
+  .spark i{flex:1;background:var(--m4);border-radius:2px 2px 0 0;display:block;}
+  .fill.bad{background:var(--fail);}
+  .pill-bad{background:rgba(213,69,59,.10);color:var(--fail);}
+  .scorerow .pill{margin-left:2px;}
+  .chartcard{border:1px solid var(--line);border-radius:9px;background:var(--card);padding:10px 11px;margin-top:11px;}
+  .chartcard .h{display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:6px;}
+  :focus-visible{outline:2px solid var(--ink);outline-offset:2px;}
+
+  /* ===== embedded live sandbox (scoped under #sbx) ===== */
+  #sbx{--faint:#A1A1AA;--pass-ink:#047857;--fail-soft:#FFF1F3;--fail-ink:#BE123C;--warn:#D97706;--pass2:#059669;--fail2:#E11D48;max-width:680px;margin:0 auto;}
+  #sbx .sb-panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;}
+  #sbx .sb-lbl{font-size:11px;font-weight:600;color:var(--faint);text-transform:uppercase;letter-spacing:.05em;margin-bottom:9px;}
+  #sbx .sb-chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;}
+  #sbx .sb-chip{border:1px solid var(--line);background:var(--card);color:var(--ink);font-size:13px;padding:7px 13px;border-radius:9px;cursor:pointer;font-family:var(--ui);}
+  #sbx .sb-chip.on{border-color:var(--blue);background:var(--blue-soft);color:var(--blue);font-weight:500;}
+  #sbx .sb-chip.dim{color:var(--muted);}
+  #sbx select{font-family:var(--ui);font-size:13px;padding:8px 11px;border:1px solid var(--line);border-radius:9px;background:var(--card);color:var(--ink);width:100%;margin-bottom:16px;}
+  #sbx .sb-run{width:100%;border:none;background:var(--blue);color:#fff;font-size:14px;font-weight:500;padding:12px;border-radius:10px;cursor:pointer;font-family:var(--ui);}
+  #sbx .sb-foot{text-align:center;font-size:11.5px;color:var(--faint);margin:11px 0 0;}
+  #sbx .sb-custom textarea{width:100%;font-family:var(--ui);font-size:13px;padding:9px 11px;border:1px solid var(--line);border-radius:9px;resize:vertical;min-height:44px;color:var(--ink);margin-bottom:7px;}
+  #sbx .sb-loading{text-align:center;padding:30px 0;color:var(--muted);font-size:13px;}
+  #sbx .sb-spin{width:24px;height:24px;border:2.5px solid var(--soft);border-top-color:var(--blue);border-radius:50%;margin:0 auto 12px;animation:sbsp .7s linear infinite;}
+  @keyframes sbsp{to{transform:rotate(360deg);}}
+  #sbx .sb-hide{display:none;}
+  #sbx .sb-card{border:1px solid var(--line);border-radius:14px;overflow:hidden;margin-top:16px;}
+  #sbx .sb-chd{display:flex;align-items:center;gap:11px;padding:13px 15px;border-bottom:1px solid var(--line);}
+  #sbx .sb-cic{width:30px;height:30px;border-radius:9px;background:var(--blue-soft);color:var(--blue);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  #sbx .sb-cic svg{width:16px;height:16px;}
+  #sbx .sb-verd{font-size:11.5px;font-weight:600;padding:4px 11px;border-radius:99px;}
+  #sbx .sb-verd.pass{background:var(--pass-soft);color:var(--pass-ink);}
+  #sbx .sb-verd.fail{background:var(--fail-soft);color:var(--fail-ink);}
+  #sbx .sb-mtr{padding:13px 15px;border-bottom:1px solid var(--line);}
+  #sbx .sb-mname{font-size:12px;color:var(--muted);}
+  #sbx .sb-mval{font-family:var(--display);font-size:22px;font-variant-numeric:tabular-nums;line-height:1;}
+  #sbx .sb-trk{position:relative;height:7px;background:var(--soft);border-radius:99px;overflow:hidden;margin-top:8px;}
+  #sbx .sb-fill{position:absolute;left:0;top:0;bottom:0;border-radius:99px;}
+  #sbx .sb-thr{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--faint);}
+  #sbx .sb-case{border-bottom:1px solid var(--line);}
+  #sbx .sb-ch{display:flex;align-items:center;gap:10px;padding:12px 15px;cursor:pointer;}
+  #sbx .sb-ch:hover{background:var(--paper);}
+  #sbx .sb-q{font-size:13px;font-weight:500;flex:1;min-width:0;}
+  #sbx .sb-caret{color:var(--faint);font-size:11px;transition:transform .15s;}
+  #sbx .sb-case.open .sb-caret{transform:rotate(90deg);}
+  #sbx .sb-cbody{display:none;padding:0 15px 14px;}
+  #sbx .sb-case.open .sb-cbody{display:block;}
+  #sbx .sb-cols{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:10px;}
+  #sbx .sb-col{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:10px 11px;min-width:0;}
+  #sbx .sb-col .l{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--faint);margin-bottom:6px;}
+  #sbx .sb-col .v{font-size:12.5px;line-height:1.5;overflow-wrap:anywhere;}
+  #sbx .sb-why{font-size:12.5px;line-height:1.55;padding:9px 11px;border-radius:9px;}
+  #sbx .sb-why.pass{background:var(--pass-soft);color:var(--pass-ink);}
+  #sbx .sb-why.fail{background:var(--fail-soft);color:var(--fail-ink);}
+  #sbx .sb-pill{font-family:var(--mono);font-size:11.5px;font-weight:700;padding:3px 9px;border-radius:7px;flex-shrink:0;}
+  #sbx .sb-pill.pass{background:var(--pass-soft);color:var(--pass-ink);}
+  #sbx .sb-pill.fail{background:var(--fail-soft);color:var(--fail-ink);}
+  #sbx .sb-calc{margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;}
+  #sbx .sb-cchip{font-family:var(--mono);font-size:10.5px;padding:3px 8px;border-radius:6px;background:var(--soft);color:var(--muted);}
+  #sbx .sb-cchip.bad{background:var(--fail-soft);color:var(--fail-ink);}
+  #sbx .sb-actions{padding:13px 15px;display:flex;gap:9px;}
+  #sbx .sb-actions button{flex:1;border:1px solid var(--line);background:var(--card);color:var(--ink);font-size:13px;padding:9px;border-radius:9px;cursor:pointer;font-family:var(--ui);}
+  #sbx .sb-err{padding:16px;color:var(--fail-ink);background:var(--fail-soft);border-radius:10px;font-size:13px;margin-top:16px;}
+
+  /* ===== modern glass + aurora (Cursor/Devin-style, light) ===== */
+  body{position:relative;}
+  .aurora{position:absolute;inset:0 0 auto 0;height:1200px;overflow:hidden;pointer-events:none;z-index:-1;}
+  .aurora::before,.aurora::after{content:"";position:absolute;border-radius:50%;filter:blur(90px);}
+  .aurora::before{width:760px;height:760px;top:-280px;left:50%;transform:translateX(-72%);
+    background:radial-gradient(closest-side,rgba(37,99,235,.20),rgba(124,58,237,.10),transparent 70%);}
+  .aurora::after{width:640px;height:640px;top:120px;left:50%;transform:translateX(6%);
+    background:radial-gradient(closest-side,rgba(6,182,212,.14),rgba(37,99,235,.08),transparent 70%);}
+  h1 .accent{background:linear-gradient(92deg,#2563EB,#7C3AED 60%,#06B6D4);-webkit-background-clip:text;background-clip:text;color:transparent;}
+
+  /* ===== embedded live sandbox: enlarged glass panel ===== */
+  #sandbox{padding-top:6px;}
+  #sbx{max-width:880px;margin:0 auto;}
+  #sbx .sb-panel,#sbx .sb-card{
+    background:rgba(255,255,255,.68);
+    -webkit-backdrop-filter:blur(18px) saturate(1.4);backdrop-filter:blur(18px) saturate(1.4);
+    border:1px solid rgba(255,255,255,.85);
+    box-shadow:0 1px 2px rgba(24,24,27,.04),0 12px 40px -12px rgba(37,99,235,.18),inset 0 1px 0 rgba(255,255,255,.9);
+  }
+  #sbx .sb-panel{padding:24px;border-radius:18px;}
+  #sbx .sb-card{border-radius:18px;}
+  #sbx .sb-run{padding:14px;font-size:15px;border-radius:12px;
+    background:linear-gradient(92deg,#2563EB,#4F46E5);
+    box-shadow:0 8px 24px -8px rgba(37,99,235,.55),inset 0 1px 0 rgba(255,255,255,.25);
+    transition:transform .12s ease,box-shadow .12s ease;}
+  #sbx .sb-run:hover{transform:translateY(-1px);box-shadow:0 12px 28px -8px rgba(37,99,235,.6),inset 0 1px 0 rgba(255,255,255,.25);}
+  #sbx .sb-chip{background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);transition:border-color .12s,background .12s;}
+  #sbx .sb-chip.on{background:var(--blue-soft);}
+
+  /* sample preview: what you are about to score */
+  #sbx .sb-preview{border:1px solid rgba(37,99,235,.16);background:rgba(239,244,254,.55);border-radius:14px;padding:13px 14px;margin-bottom:16px;}
+  #sbx .sb-preview .pv-title{font-size:10.5px;font-weight:600;color:var(--blue);text-transform:uppercase;letter-spacing:.05em;margin-bottom:9px;}
+  #sbx .sb-preview .pv-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px;}
+  #sbx .sb-preview .pv-col{background:rgba(255,255,255,.8);border:1px solid var(--line);border-radius:10px;padding:9px 10px;min-width:0;}
+  #sbx .sb-preview .pv-col .l{font-size:9.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--faint);margin-bottom:5px;}
+  #sbx .sb-preview .pv-col .v{font-size:12px;line-height:1.5;overflow-wrap:anywhere;}
+  #sbx .sb-preview .pv-note{font-size:11px;color:var(--muted);margin:9px 0 0;}
+  #sbx .sb-preview .pv-mk{padding:0 3px;border-radius:3px;background:var(--fail-soft);color:var(--fail-ink);}
+  @media(max-width:720px){#sbx .sb-preview .pv-grid{grid-template-columns:1fr;}}
+
+  /* thinking state: shimmer sweep + pulsing skeleton (the judge at work) */
+  #sbx .sb-think{padding:30px 0;text-align:center;}
+  #sbx .sb-think .tx{font-size:14px;font-weight:500;display:inline-block;
+    background:linear-gradient(90deg,#A1A1AA 0%,#18181B 45%,#2563EB 50%,#18181B 55%,#A1A1AA 100%);
+    background-size:220% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;
+    animation:sbshine 1.6s linear infinite;}
+  #sbx .sb-skel{max-width:420px;margin:16px auto 0;display:flex;flex-direction:column;gap:8px;}
+  #sbx .sb-skel i{display:block;height:9px;border-radius:99px;
+    background:linear-gradient(90deg,var(--soft) 25%,#E9EDF6 50%,var(--soft) 75%);
+    background-size:200% 100%;animation:sbshine 1.4s linear infinite;}
+  #sbx .sb-skel i:nth-child(2){width:82%;margin:0 auto;}
+  #sbx .sb-skel i:nth-child(3){width:64%;margin:0 auto;}
+  @keyframes sbshine{from{background-position:200% 0}to{background-position:-20% 0}}
+  @media (prefers-reduced-motion:reduce){
+    #sbx .sb-think .tx,#sbx .sb-skel i{animation:none;background:none;color:var(--muted);-webkit-text-fill-color:currentColor;}
+    #sbx .sb-run{transition:none;}
+  }
+  #sbx .sb-notice{border:1px solid rgba(217,119,6,.28);background:rgba(255,251,235,.85);color:#B45309;
+    border-radius:12px;padding:10px 13px;font-size:12.5px;line-height:1.5;margin-bottom:12px;}
+  #sbx .sb-cols3{grid-template-columns:1fr 1fr 1fr;}
+  @media(max-width:720px){#sbx .sb-cols3{grid-template-columns:1fr;}}
+</style>
+</head>
+<body>
+<div class="aurora" aria-hidden="true"></div>
+
+<nav class="nav"><div class="wrap row">
+  <a class="brand" href="/">
+    <svg viewBox="0 0 32 32" fill="none"><circle cx="13.5" cy="13.5" r="9" stroke="currentColor" stroke-width="2.4"/><path d="M20.5 20.5L27 27" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M9.5 13.8l2.8 2.8 5-5.4" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span class="wordmark">retri<span class="e">EVAL</span></span>
+  </a>
+  <div class="navlinks">
+    <a href="#how" class="hideSm">How it works</a>
+    <a href="#manual" class="hideSm">In chat</a>
+    <a href="#sandbox" class="hideSm">Try it</a>
+    <a href="#quickstart" class="hideSm">Quickstart</a>
+    <a href="#demos" class="hideSm">Demos</a>
+    <a href="#compare" class="hideSm">Compare</a>
+    <a href="/dashboard">Dashboard</a>
+    <a href="https://github.com/hcarrillo001/retrieval-mcp" class="cta">GitHub</a>
+  </div>
+</div></nav>
+
+<header class="hero"><div class="wrap">
+  <span class="badge">open source · local-first · MCP</span>
+  <h1>Evals for AI systems, <span class="accent">as an MCP.</span></h1>
+  <p class="sub">A local-first LLM-eval server for Claude, Cursor, or CI — score RAG <strong>by stage</strong>, author metrics in plain language, track every run. Try a real eval below, no signup.</p>
+</div></header>
+
+<section id="sandbox"><div class="wrap">
+  <h2>Try it live</h2>
+  <p class="lead">Run a real eval right here, no signup. Pick a sample (or paste your own input, context, and output), choose a free judge model, and watch retriEVAL score it. Nothing is saved.</p>
+  <div id="sbx">
+    <div class="sb-panel" id="sbSetup">
+      <div class="sb-lbl">1 · Choose a sample</div>
+      <div class="sb-chips" id="sbSamples">
+        <button class="sb-chip on" data-s="halluc">Hallucination</button>
+        <button class="sb-chip" data-s="clean">All-pass</button>
+        <button class="sb-chip" data-s="mixed">Mixed (3 cases)</button>
+        <button class="sb-chip dim" data-s="custom">Paste your own</button>
+      </div>
+      <div class="sb-preview" id="sbPreview"></div>
+      <div class="sb-custom sb-hide" id="sbCustom">
+        <textarea id="sbInput" placeholder="Question / input"></textarea>
+        <textarea id="sbContext" placeholder="Retrieved context — simulates your RAG retrieval step"></textarea>
+        <textarea id="sbOutput" placeholder="Model output (what the system answered)"></textarea>
+      </div>
+      <div class="sb-lbl">2 · Metric</div>
+      <div class="sb-chips" id="sbMetrics">
+        <button class="sb-chip on" data-m="faithfulness">faithfulness</button>
+        <button class="sb-chip dim" data-m="answer_relevancy">answer_relevancy</button>
+        <button class="sb-chip dim" data-m="hallucination">hallucination</button>
+      </div>
+      <div class="sb-lbl">3 · Judge model</div>
+      <select id="sbModel">
+        <option value="groq-llama">Llama 3.3 70B · via Groq (free)</option>
+        <option value="gemini-flash">Gemini 2.5 Flash · Google (free)</option>
+        <option value="qwen-72b">Qwen 2.5 72B · via OpenRouter (free)</option>
+        <option value="deepseek">DeepSeek V3 · via OpenRouter (free)</option>
+        <option value="ollama-cloud">gpt-oss 20B · Ollama Cloud (free)</option>
+      </select>
+      <button class="sb-run" id="sbRun">Run sample eval</button>
+      <p class="sb-foot" id="sbFoot">Runs on a free model · nothing is saved · limited per day</p>
+    </div>
+    <div class="sb-think sb-hide" id="sbLoading"><span class="tx" id="sbThinkTx">Sending to the judge model…</span><div class="sb-skel"><i></i><i></i><i></i></div></div>
+    <div id="sbResult"></div>
+  </div>
+</div></section>
+
+<section id="loop"><div class="wrap">
+  <div class="flow">
+    <div class="cap">The loop: score your AI's outputs, track them, improve</div>
+    <div class="steps">
+      <div class="step"><div class="n">01 · Collect</div><div class="t">Outputs</div><div class="d">from your app or RAG</div></div>
+      <div class="arrow">&#8594;</div>
+      <div class="step"><div class="n">02 · Score</div><div class="t">By stage</div><div class="d">retriever vs generator</div></div>
+      <div class="arrow">&#8594;</div>
+      <div class="step"><div class="n">03 · Track</div><div class="t">Charts + history</div><div class="d">on your dashboard</div></div>
+      <div class="arrow">&#8594;</div>
+      <div class="step"><div class="n">04 · Improve</div><div class="t">Iterate</div><div class="d">gate quality over time</div></div>
+    </div>
+  </div>
+</div></section>
+
+<section id="how"><div class="wrap">
+  <h2>What makes it different</h2>
+  <p class="lead">The metrics aren't new; DeepEval and Ragas cover those. The shape is: a
+  standalone, local-first MCP an agent can call mid-workflow, with RAG scored by stage.</p>
+  <div class="feats">
+    <div class="feat"><div class="tag">stage-separated</div><h3>Retriever vs generator</h3><p>contextual_recall flags retrieval misses; faithfulness flags hallucinations. Know which half to fix, not just "the answer is bad."</p></div>
+    <div class="feat"><div class="tag">in your editor</div><h3>Runs in Cursor</h3><p>Build custom skills and QE pipelines around it to keep improving evals on your AI products. retriEVAL is the scoring engine your workflows reach for.</p></div>
+    <div class="feat"><div class="tag">bring your own model</div><h3>Your model, your key</h3><p>Run free on a local Ollama model, or plug in your own Claude, OpenAI, or any OpenAI-compatible LLM key. No platform account, no data leaving your box.</p></div>
+    <div class="feat"><div class="tag">history</div><h3>Charts + run history</h3><p>Every run is saved (file or Supabase). Trend by model, compare runs, drill into the case that regressed, on a dashboard you own.</p></div>
+  </div>
+</div></section>
+
+<section id="manual"><div class="wrap">
+  <h2>Or just run evals by chatting</h2>
+  <p class="lead">No pipeline required. Connect retriEVAL in Claude or another chat UI, toggle it on, and a manual tester can score outputs, author metrics, and pull up charts in plain language.</p>
+  <div class="twocol">
+    <div>
+      <div class="colh">Toggle it on, like any connector</div>
+      <div class="mock">
+        <div class="mock-bar"><i></i><i></i><i></i><span>Connectors</span></div>
+        <div class="mock-body" style="padding:4px 14px">
+          <div class="connrow"><div class="l"><span class="ic"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18" stroke="currentColor" stroke-width="1.6"/></svg></span> Web search</div><div class="tog"></div></div>
+          <div class="connrow"><div class="l"><span class="ic"><svg viewBox="0 0 32 32" fill="none"><circle cx="13.5" cy="13.5" r="9" stroke="currentColor" stroke-width="2.6"/><path d="M20.5 20.5L27 27" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/><path d="M9.5 13.8l2.8 2.8 5-5.4" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span> retriEVAL</div><div class="tog on"></div></div>
+          <div class="connrow"><div class="l"><span class="ic"><svg viewBox="0 0 24 24" fill="none"><path d="M8 3h8l5 9-4 7H7l-4-7z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></span> Google Drive</div><div class="tog"></div></div>
+        </div>
+      </div>
+      <p class="muted-s" style="margin-top:8px">Illustration. Uses the hosted server, since chat UIs connect to remote MCPs.</p>
+    </div>
+    <div>
+      <div class="colh">Evals appear right in the chat</div>
+      <div class="mock">
+        <div class="mock-bar"><i></i><i></i><i></i><span>Chat</span></div>
+        <div class="mock-body">
+          <div class="chat">
+            <div class="msg user">Score this answer against the refund policy: faithfulness and answer relevancy.</div>
+            <div class="msg bot">
+              <div style="font-size:12.5px;color:var(--muted);margin-bottom:9px">Ran 3 metrics on 12 cases &nbsp;<span class="pill pill-bad">1 FAILING</span></div>
+              <div class="scorerow"><span class="nm">faithfulness</span><span class="track"><span class="fill" style="width:92%"></span></span><span class="v">.92</span><span class="pill">PASS</span></div>
+              <div class="scorerow"><span class="nm">answer_relevancy</span><span class="track"><span class="fill" style="width:88%"></span></span><span class="v">.88</span><span class="pill">PASS</span></div>
+              <div class="scorerow"><span class="nm">contextual_recall</span><span class="track"><span class="fill bad" style="width:58%"></span></span><span class="v">.58</span><span class="pill pill-bad">FAIL</span></div>
+              <div class="chartcard">
+                <div class="h"><span>plot_metric_trend · faithfulness</span><span>last 6 runs</span></div>
+                <svg viewBox="0 0 330 128" width="100%" preserveAspectRatio="xMidYMid meet" font-family="JetBrains Mono, monospace" font-size="8">
+                  <line x1="34" y1="116" x2="318" y2="116" stroke="#EAEAEC"/>
+                  <line x1="34" y1="12" x2="34" y2="116" stroke="#EAEAEC"/>
+                  <text x="6" y="15" fill="#8A8F98">1.0</text>
+                  <text x="6" y="67" fill="#8A8F98">0.5</text>
+                  <text x="6" y="119" fill="#8A8F98">0.0</text>
+                  <polygon points="34,43.2 90,34.9 145,39.0 201,26.6 256,22.4 312,15.1 312,27.6 256,35.9 201,43.2 145,55.7 90,51.5 34,58.8" fill="#E7E7EA"/>
+                  <line x1="34" y1="43.2" x2="318" y2="43.2" stroke="#8A8F98" stroke-width="1" stroke-dasharray="4 3"/>
+                  <text x="296" y="40" fill="#8A8F98">0.70</text>
+                  <polyline points="34,51.5 90,43.2 145,47.4 201,34.9 256,28.6 312,20.3" fill="none" stroke="#2563EB" stroke-width="2" stroke-linejoin="round"/>
+                  <circle cx="34" cy="51.5" r="3.2" fill="#D5453B"/>
+                  <circle cx="90" cy="43.2" r="3.2" fill="#15924F"/>
+                  <circle cx="145" cy="47.4" r="3.2" fill="#D5453B"/>
+                  <circle cx="201" cy="34.9" r="3.2" fill="#15924F"/>
+                  <circle cx="256" cy="28.6" r="3.2" fill="#15924F"/>
+                  <circle cx="312" cy="20.3" r="3.2" fill="#15924F"/>
+                </svg>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div></section>
+
+
+
+<section id="quickstart"><div class="wrap">
+  <h2>Quickstart</h2>
+  <p class="lead">Run it locally over stdio, or connect the hosted server from anywhere.</p>
+  <div class="twocol">
+    <div>
+      <div class="colh">Local (Claude Desktop / Cursor)</div>
+      <pre><button class="copy" data-c="pip install retrieval-mcp&#10;export ANTHROPIC_API_KEY=sk-ant-...">copy</button><span class="c"># install</span>
+pip install retrieval-mcp
+export ANTHROPIC_API_KEY=sk-ant-...
+
+<span class="c"># add to claude_desktop_config.json</span>
+{
+  "mcpServers": {
+    "retrieval": {
+      "command": "retrieval-mcp"
+    }
+  }
+}</pre>
+    </div>
+    <div>
+      <div class="colh">Hosted (any client, incl. Claude.ai)</div>
+      <pre><button class="copy" data-c='Connect a custom connector to https://YOUR-APP.up.railway.app/mcp'>copy</button><span class="c"># Claude.ai → Settings → Connectors</span>
+Add custom connector:
+  URL: https://YOUR-APP.up.railway.app/mcp
+  Auth: Bearer &lt;token&gt;
+
+<span class="c"># then just ask Claude</span>
+"Load my golden set and run
+ faithfulness + answer_relevancy."</pre>
+    </div>
+  </div>
+  <p class="lead" style="margin-top:18px">Pick your judge: free local <code>Ollama</code> (<code>RETRIEVAL_JUDGE_BACKEND=ollama</code>), your <code>Anthropic</code> key, your <code>OpenAI</code> key, or any OpenAI-compatible endpoint via <code>OPENAI_BASE_URL</code>. Full deploy guide (Supabase + Railway + Vercel) is in the repo's <code>DEPLOY.md</code>.</p>
+</div></section>
+
+<section id="demos"><div class="wrap">
+  <h2>See it in action</h2>
+  <p class="lead">Walkthroughs and demos: connecting retriEVAL, authoring a metric, and building QE pipelines in Cursor.</p>
+  <div class="feats">
+    <div class="feat" style="aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;text-align:center;background:var(--soft)">
+      <div><div style="font-family:var(--mono);font-size:12px;color:var(--muted)">▶ video coming soon</div><div style="font-size:13px;margin-top:6px">Quickstart: connect + first eval</div></div>
+    </div>
+    <div class="feat" style="aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;text-align:center;background:var(--soft)">
+      <div><div style="font-family:var(--mono);font-size:12px;color:var(--muted)">▶ video coming soon</div><div style="font-size:13px;margin-top:6px">Build a QE pipeline in Cursor</div></div>
+    </div>
+  </div>
+  <p class="lead" style="margin-top:16px;font-size:13.5px">YouTube demos will be embedded here.</p>
+</div></section>
+
+<section id="compare"><div class="wrap">
+  <h2>How it compares</h2>
+  <p class="lead">Honest positioning: not "better metrics," but a different shape: standalone, local, and usable as a tool inside an agent.</p>
+  <table>
+    <thead><tr><th>&nbsp;</th><th>retriEVAL</th><th>Hosted eval platforms</th><th>Eval libraries</th></tr></thead>
+    <tbody>
+      <tr><td>Works as an MCP tool inside an agent</td><td><span class="yes">yes</span></td><td>platform-gated</td><td><span class="no">no</span></td></tr>
+      <tr><td>Runs local, no account</td><td><span class="yes">yes</span></td><td><span class="no">no</span></td><td><span class="yes">yes</span></td></tr>
+      <tr><td>Bring your own model / key (Ollama, Claude, OpenAI, …)</td><td><span class="yes">yes</span></td><td>limited</td><td><span class="yes">yes</span></td></tr>
+      <tr><td>RAG scored by stage, built in</td><td><span class="yes">yes</span></td><td>varies</td><td>manual</td></tr>
+      <tr><td>Own dashboard + history</td><td><span class="yes">yes</span></td><td><span class="yes">yes</span></td><td><span class="no">no</span></td></tr>
+    </tbody>
+  </table>
+</div></section>
+
+<footer><div class="wrap" style="display:flex;justify-content:space-between;width:100%;flex-wrap:wrap;gap:10px">
+  <div>
+    <a href="https://github.com/hcarrillo001/retrieval-mcp">GitHub</a>
+    <a href="/dashboard">Dashboard</a>
+    <a href="#quickstart">Quickstart</a>
+  </div>
+  <div>retriEVAL · MIT · retrieval-mcp.com</div>
+</div></footer>
+
+<script>
+  document.querySelectorAll(".copy").forEach(b=>{
+    b.addEventListener("click",()=>{
+      navigator.clipboard.writeText(b.dataset.c).then(()=>{const t=b.textContent;b.textContent="copied ✓";setTimeout(()=>b.textContent=t,1200);});
+    });
+  });
+
+  /* ===== embedded live sandbox ===== */
+  (function(){
+    var RULER='<svg viewBox="0 0 24 24" fill="none"><path d="M3 8h18v8H3z" stroke="currentColor" stroke-width="1.8"/><path d="M7 8v3M11 8v4M15 8v3M19 8v4" stroke="currentColor" stroke-width="1.6"/></svg>';
+    var sample="halluc", metric="faithfulness";
+    var esc=function(s){return String(s==null?"":s).replace(/[&<>]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;"}[c];});};
+    var fm=function(n){return n==null?"—":Number(n).toFixed(2);};
+    var $=function(id){return document.getElementById(id);};
+
+    function pick(group,attr,setter){
+      group.querySelectorAll(".sb-chip").forEach(function(b){
+        b.onclick=function(){
+          group.querySelectorAll(".sb-chip").forEach(function(x){x.classList.remove("on");x.classList.add("dim");});
+          b.classList.add("on");b.classList.remove("dim");setter(b.getAttribute(attr));
+        };
+      });
+    }
+    pick($("sbSamples"),"data-s",function(v){
+      sample=v;$("sbCustom").classList.toggle("sb-hide",v!=="custom");
+      $("sbRun").textContent=v==="custom"?"Run my eval":"Run sample eval";
+      preview(v);
+    });
+    pick($("sbMetrics"),"data-m",function(v){metric=v;});
+
+    // what each curated sample contains — shown before running so the
+    // input / RAG context / output relationship is clear
+    var PREVIEWS={
+      halluc:{note:"The output invents a fact the context never said — the judge should catch it.",rows:[
+        {q:"What is the Eiffel Tower made of?",c:"The Eiffel Tower is built from puddled wrought iron.",o:'The Eiffel Tower is made entirely of <span class="pv-mk">solid gold</span>.'}]},
+      clean:{note:"The output only states what the context supports — this one should pass.",rows:[
+        {q:"What is the capital of France?",c:"Paris is the capital and most populous city of France.",o:"The capital of France is Paris."}]},
+      mixed:{note:"One grounded answer, two planted hallucinations — watch the judge separate them.",rows:[
+        {q:"When was the Eiffel Tower completed?",c:"Completed in 1889 for the World's Fair.",o:"It was completed in 1889."},
+        {q:"What is the Eiffel Tower made of?",c:"Built from wrought iron.",o:'It is made entirely of <span class="pv-mk">solid gold</span>.'},
+        {q:"How many moons does Mars have?",c:"Mars has two small moons, Phobos and Deimos.",o:'Mars has <span class="pv-mk">12 moons</span>, the largest named <span class="pv-mk">Titan</span>.'}]}
+    };
+    function preview(v){
+      var p=PREVIEWS[v], el=$("sbPreview");
+      if(!p){el.classList.add("sb-hide");return;}
+      el.classList.remove("sb-hide");
+      el.innerHTML='<div class="pv-title">What you\'re scoring</div>'+
+        p.rows.map(function(r){return '<div class="pv-grid" style="margin-bottom:8px">'+
+          '<div class="pv-col"><div class="l">Input</div><div class="v">'+r.q+'</div></div>'+
+          '<div class="pv-col"><div class="l">Retrieved context · RAG simulation</div><div class="v">'+r.c+'</div></div>'+
+          '<div class="pv-col"><div class="l">Model output</div><div class="v">'+r.o+'</div></div>'+
+        '</div>';}).join("")+
+        '<p class="pv-note">'+p.note+'</p>';
+    }
+    preview(sample);
+
+    var THINK=["Sending to the judge model…","Extracting claims from the output…","Checking each claim against the context…","Writing the verdict…"];
+    var thinkTimer=null;
+    function startThink(){var i=0;$("sbThinkTx").textContent=THINK[0];
+      thinkTimer=setInterval(function(){i=(i+1)%THINK.length;$("sbThinkTx").textContent=THINK[i];},2200);}
+    function stopThink(){if(thinkTimer){clearInterval(thinkTimer);thinkTimer=null;}}
+
+    function calcChips(d){
+      if(!d||typeof d!=="object")return "";
+      var chips=[];
+      Object.keys(d).forEach(function(k){
+        var v=d[k];
+        if(Array.isArray(v)){if(!v.length)return;chips.push('<span class="sb-cchip bad"><b>'+v.length+'</b> '+esc(k.replace(/_/g," "))+'</span>');
+          v.slice(0,3).forEach(function(it){chips.push('<span class="sb-cchip bad">'+esc(String(it)).slice(0,70)+'</span>');});}
+        else if(typeof v==="number")chips.push('<span class="sb-cchip">'+esc(k.replace(/_/g," "))+' <b>'+v+'</b></span>');
+      });
+      return chips.length?'<div class="sb-calc">'+chips.join("")+'</div>':"";
+    }
+    function render(data){
+      var agg=data.aggregate||{},cases=data.per_case||[],thr=data.threshold||0.7;
+      var mn=Object.keys(agg)[0]||metric,a=agg[mn]||{},mean=a.mean_score;
+      var anyFail=cases.some(function(c){var sc=(c.scores||{})[mn]||{};return sc.success===false;});
+      var tcol=mean>=thr?"var(--pass-ink)":"var(--fail-ink)";
+      var col=mean>=thr?"var(--pass2)":(mean>=0.4?"var(--warn)":"var(--fail2)");
+      var pct=Math.max(2,Math.round((mean||0)*100));
+      var body=cases.map(function(c,i){
+        var sc=(c.scores||{})[mn]||{};var pass=sc.success!==false;
+        var ctx=Array.isArray(c.retrieval_context)?c.retrieval_context.join(" • "):(c.retrieval_context||"—");
+        return '<div class="sb-case open" id="sbcs'+i+'"><div class="sb-ch" onclick="document.getElementById(\'sbcs'+i+'\').classList.toggle(\'open\')">'+
+          '<span class="sb-pill '+(pass?'pass':'fail')+'">'+fm(sc.score)+' '+(pass?'pass':'fail')+'</span>'+
+          '<span class="sb-q">'+esc(c.input||"—")+'</span><span class="sb-caret">▶</span></div>'+
+          '<div class="sb-cbody"><div class="sb-cols sb-cols3">'+
+            '<div class="sb-col"><div class="l">Input</div><div class="v">'+esc(c.input||"—")+'</div></div>'+
+            '<div class="sb-col"><div class="l">Retrieved context · RAG simulation</div><div class="v">'+esc(ctx)+'</div></div>'+
+            '<div class="sb-col"><div class="l">Model output</div><div class="v">'+esc(c.actual_output||"—")+'</div></div>'+
+          '</div><div class="sb-why '+(pass?'pass':'fail')+'">'+esc(sc.reason||"(no explanation)")+'</div>'+calcChips(sc.details)+'</div></div>';
+      }).join("");
+      var rem=(typeof data.remaining_today==="number")?(" · "+data.remaining_today+" runs left today"):"";
+      $("sbResult").innerHTML=
+        '<div class="sb-card"><div class="sb-chd"><span class="sb-cic">'+RULER+'</span>'+
+        '<div style="flex:1"><div style="font-weight:600;font-size:13.5px">'+esc(mn)+'</div>'+
+        '<div style="font-size:11px;color:var(--faint);margin-top:2px">threshold '+fm(thr)+' · '+cases.length+' case'+(cases.length===1?'':'s')+' · '+esc(data.judge_model||"")+'</div></div>'+
+        '<span class="sb-verd '+(anyFail?'fail':'pass')+'">'+(anyFail?'Needs review':'All pass')+'</span></div>'+
+        '<div class="sb-mtr"><span class="sb-mname">Mean '+esc(mn)+'</span> <span class="sb-mval" style="color:'+tcol+'">'+fm(mean)+'</span>'+
+        '<div class="sb-trk"><div class="sb-fill" style="width:'+pct+'%;background:'+col+'"></div><div class="sb-thr" style="left:'+Math.round(thr*100)+'%"></div></div></div>'+
+        body+
+        '<div class="sb-actions"><button id="sbAgain">Run another sample</button><button id="sbReset">New run (clears)</button></div></div>';
+      $("sbFoot").textContent="Nothing is saved"+rem;
+      if(data.notice){$("sbResult").insertAdjacentHTML("afterbegin",
+        '<div class="sb-notice">'+esc(data.notice)+'</div>');}
+      $("sbAgain").onclick=back;$("sbReset").onclick=back;
+    }
+    function back(){$("sbResult").innerHTML="";$("sbSetup").classList.remove("sb-hide");}
+
+    $("sbRun").onclick=async function(){
+      var payload={metric:metric,model:$("sbModel").value};
+      if(sample==="custom"){
+        payload.cases=[{input:$("sbInput").value,retrieval_context:[$("sbContext").value],actual_output:$("sbOutput").value}];
+        if(!payload.cases[0].input&&!payload.cases[0].actual_output){alert("Add an input and a model output to score.");return;}
+      } else { payload.sample=sample; }
+      $("sbSetup").classList.add("sb-hide");$("sbLoading").classList.remove("sb-hide");$("sbResult").innerHTML="";startThink();
+      try{
+        var r=await fetch("/api/sandbox",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(payload)});
+        var data=await r.json();
+        stopThink();$("sbLoading").classList.add("sb-hide");
+        if(!r.ok){$("sbResult").innerHTML='<div class="sb-err">'+esc(data.message||data.error||("error "+r.status))+'</div>';
+          $("sbSetup").classList.remove("sb-hide");return;}
+        render(data);
+      }catch(e){stopThink();$("sbLoading").classList.add("sb-hide");$("sbSetup").classList.remove("sb-hide");
+        $("sbResult").innerHTML='<div class="sb-err">'+esc(String(e))+'</div>';}
+    };
+  })();
+</script>
+</body>
+</html>
