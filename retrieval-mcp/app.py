@@ -7,6 +7,7 @@ header  Authorization: Bearer <RETRIEVAL_TOKEN>.  Health check at /healthz.
 """
 from __future__ import annotations
 import os
+import secrets
 
 import uvicorn
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -53,11 +54,24 @@ class NormalizeHost(BaseHTTPMiddleware):
 
 
 class BearerAuth(BaseHTTPMiddleware):
+    """Accept the token either as a bearer header or as a ?key= query param.
+
+    Claude's custom-connector dialog only takes a URL (request-header auth is
+    still a limited beta), so a URL-carried token is the only way to keep this
+    endpoint authenticated while connecting it there. Note that URLs show up in
+    proxy and server logs far more readily than headers do, so treat a
+    key-in-URL token as lower-trust and rotate it if it leaks.
+    """
+
     async def dispatch(self, request, call_next):
         if request.url.path in PUBLIC_PATHS:
             return await call_next(request)
         if TOKEN:
-            if request.headers.get("authorization", "") != f"Bearer {TOKEN}":
+            header = request.headers.get("authorization", "")
+            qs_key = request.query_params.get("key", "")
+            ok = (secrets.compare_digest(header, f"Bearer {TOKEN}")
+                  or (qs_key and secrets.compare_digest(qs_key, TOKEN)))
+            if not ok:
                 return JSONResponse({"error": "unauthorized"}, status_code=401)
         return await call_next(request)
 
