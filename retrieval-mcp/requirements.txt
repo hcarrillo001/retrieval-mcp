@@ -1,4 +1,6 @@
-mcp>=1.2.0
+# Pinned below 2.0: the MCP SDK 2.x removed `mcp.server.fastmcp`, which
+# server.py imports. Unpinning this will break the build on the next deploy.
+mcp>=1.2.0,<2
 anthropic>=0.40.0
 matplotlib>=3.7
 uvicorn>=0.30
