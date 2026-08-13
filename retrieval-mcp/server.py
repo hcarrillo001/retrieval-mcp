@@ -39,6 +39,18 @@ SANDBOX_MAX_CHARS = int(os.environ.get("SANDBOX_MAX_CHARS", "8000"))
 SANDBOX_ALLOWED_METRICS = {"faithfulness", "answer_relevancy", "hallucination",
                            "contextual_relevancy"}
 
+# What each metric actually needs to mean anything. faithfulness/hallucination
+# compare the output against the retrieved context — with no context there is
+# nothing to contradict, so they would score a perfect 1.00 on a wrong answer.
+SANDBOX_METRIC_REQUIRES = {
+    "faithfulness": ("retrieval_context", "actual_output"),
+    "hallucination": ("retrieval_context", "actual_output"),
+    "answer_relevancy": ("input", "actual_output"),
+    "contextual_relevancy": ("input", "retrieval_context"),
+}
+_FIELD_LABEL = {"retrieval_context": "retrieved context", "actual_output": "model output",
+                "input": "input"}
+
 
 def run_sandbox_eval(cases: list, metric: str, model_id: str,
                      threshold: float = 0.7) -> dict:
@@ -79,6 +91,15 @@ def run_sandbox_eval(cases: list, metric: str, model_id: str,
         })
 
     full, scores = [], []
+    # A metric whose required inputs are missing produces a meaningless score
+    # (hallucination with no context "passes" any answer, however wrong). Refuse.
+    for field in SANDBOX_METRIC_REQUIRES.get(metric, ()):
+        if not any(c.get(field) for c in clean):
+            label = _FIELD_LABEL.get(field, field)
+            return {"error": "missing_input",
+                    "message": (f"{metric} scores the model output against the {label}, "
+                                f"so it needs a {label} to compare with. "
+                                f"Add one and run again.")}
     try:
         with judge_as(model_id):
             for i, case in enumerate(clean):
@@ -96,6 +117,9 @@ def run_sandbox_eval(cases: list, metric: str, model_id: str,
     except BudgetExceeded as e:
         return {"error": "budget_exceeded", "message": str(e)}
     except Exception as e:
+        # surface in Railway/host logs too — the HTTP response body alone is
+        # invisible server-side, which makes remote debugging guesswork
+        print(f"SANDBOX judge_error model={model_id} metric={metric}: {e}", flush=True)
         return {"error": "judge_error", "message": str(e)[:300]}
 
     aggregate = {metric: {
@@ -115,6 +139,23 @@ def run_sandbox_eval(cases: list, metric: str, model_id: str,
     if notes:
         out["notice"] = " ".join(notes)
     return out
+
+
+def _dashboard_link(run_id: str) -> str:
+    """Deep link to a saved run in the web dashboard.
+
+    Nothing extra is stored for this: the run is already persisted by save_run,
+    so the link just points at it by id. Returns "" when no dashboard is
+    configured, in which case the link is simply omitted from tool output.
+    """
+    base = os.environ.get("RETRIEVAL_DASHBOARD_URL", "").rstrip("/")
+    if not base or not run_id:
+        return ""
+    key = os.environ.get("DASH_TOKEN", "")
+    q = f"?run={run_id}"
+    if key:
+        q += f"&key={key}"
+    return f"{base}/dashboard{q}"
 
 
 def _run_metric(name: str, case: dict, threshold: float) -> dict:
@@ -214,14 +255,18 @@ def run_eval(golden_set: str, metrics: List[str], threshold: float = 0.7,
                         generator_model=generator_model, judge_model=judge_model)
 
     worst = sorted(full, key=lambda r: r["min_score"])[:limit]
-    return {"run_id": run_id, "golden_set": golden_set, "threshold": threshold,
-            "generator_model": generator_model, "judge_model": judge_model,
-            "aggregate": aggregate, "budget": budget_status(),
-            "total_cases": len(full), "shown": len(worst),
-            "showing": "lowest-scoring first" if len(full) > len(worst) else "all",
-            "per_case": worst,
-            "more": (f"{len(full) - len(worst)} more — call show_run_cases('{run_id}')"
-                     if len(full) > len(worst) else None)}
+    out = {"run_id": run_id, "golden_set": golden_set, "threshold": threshold,
+           "generator_model": generator_model, "judge_model": judge_model,
+           "aggregate": aggregate, "budget": budget_status(),
+           "total_cases": len(full), "shown": len(worst),
+           "showing": "lowest-scoring first" if len(full) > len(worst) else "all",
+           "per_case": worst,
+           "more": (f"{len(full) - len(worst)} more, call show_run_cases('{run_id}')"
+                    if len(full) > len(worst) else None)}
+    link = _dashboard_link(run_id)
+    if link:
+        out["view_url"] = link
+    return out
 
 
 @mcp.tool()
@@ -278,20 +323,25 @@ def list_runs(golden_set: str = "", last_n: int = 20) -> dict:
 
 @mcp.tool()
 def plot_metric_trend(metric: str, golden_set: str = "", last_n: int = 10,
-                      threshold: float = 0.7, show_range: bool = True) -> Image:
-    """Line chart of one metric's mean score across recent runs, with a threshold
-    line and (optionally) a shaded min-max range band for the window."""
+                      threshold: float = 0.7, show_range: bool = True,
+                      fmt: str = "text"):
+    """One metric's mean score across recent runs, with a threshold reference.
+    fmt="text" (default) returns an ASCII chart that renders in any client;
+    fmt="image" returns a PNG line chart (only useful where images display)."""
     runs = H.load_runs(golden_set or None, last_n)
     if not runs:
         raise ValueError("No runs saved yet. Run an eval first.")
-    return Image(data=C.trend(runs, metric, threshold, show_range), format="png")
+    if fmt == "image":
+        return Image(data=C.trend(runs, metric, threshold, show_range), format="png")
+    return C.trend_text(runs, metric, threshold)
 
 
 @mcp.tool()
 def plot_run(run_id: str = "latest", golden_set: str = "",
-             threshold: float = 0.7) -> Image:
-    """Bar chart of every metric's mean score for a single run (default: latest).
-    Bars are green/red by pass/fail against the threshold."""
+             threshold: float = 0.7, fmt: str = "text"):
+    """Every metric's mean score for a single run (default: latest).
+    fmt="text" (default) returns an ASCII bar chart that renders in any client;
+    fmt="image" returns a PNG bar chart (only useful where images display)."""
     if run_id == "latest":
         runs = H.load_runs(golden_set or None, last_n=1)
         if not runs:
@@ -301,14 +351,17 @@ def plot_run(run_id: str = "latest", golden_set: str = "",
         run = H.get_run(run_id)
         if not run:
             raise ValueError(f"No run '{run_id}'.")
-    return Image(data=C.run_bars(run, threshold), format="png")
+    if fmt == "image":
+        return Image(data=C.run_bars(run, threshold), format="png")
+    return C.run_bars_text(run, threshold)
 
 
 @mcp.tool()
 def compare_runs(run_ids: Optional[List[str]] = None, golden_set: str = "",
-                 last_n: int = 2, threshold: float = 0.7) -> Image:
-    """Grouped-bar comparison of several runs across all shared metrics.
-    Pass explicit run_ids, or omit to compare the last_n runs."""
+                 last_n: int = 2, threshold: float = 0.7, fmt: str = "text"):
+    """Compare several runs across all shared metrics.
+    fmt="text" (default) returns an ASCII table that renders in any client;
+    fmt="image" returns a PNG grouped-bar chart."""
     if run_ids:
         runs = [H.get_run(r) for r in run_ids]
         runs = [r for r in runs if r]
@@ -316,7 +369,9 @@ def compare_runs(run_ids: Optional[List[str]] = None, golden_set: str = "",
         runs = H.load_runs(golden_set or None, last_n)
     if len(runs) < 2:
         raise ValueError("Need at least 2 runs to compare.")
-    return Image(data=C.compare(runs, threshold), format="png")
+    if fmt == "image":
+        return Image(data=C.compare(runs, threshold), format="png")
+    return C.compare_text(runs, threshold)
 
 
 @mcp.tool()
