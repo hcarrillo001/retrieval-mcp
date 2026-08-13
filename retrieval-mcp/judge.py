@@ -225,10 +225,11 @@ def _ollama(system: str, user: str, max_tokens: int = 1024) -> str:
 
 def _openai(system: str, user: str, max_tokens: int = 1024) -> str:
     """OpenAI-compatible Chat Completions. Works with OpenAI and any compatible
-    endpoint (OpenRouter, Together, a local vLLM, etc.) via OPENAI_BASE_URL —
+    endpoint (OpenRouter, Together, Groq, a local vLLM, etc.) via OPENAI_BASE_URL —
     so users can bring whatever LLM they want with their own key.
     If a per-call sandbox override is active, use its endpoint/key/model."""
     import urllib.request
+    import urllib.error
 
     ov = _override.get()
     if ov:
@@ -237,14 +238,31 @@ def _openai(system: str, user: str, max_tokens: int = 1024) -> str:
         base = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
         key = os.environ.get("OPENAI_API_KEY", "")
         model = os.environ.get("RETRIEVAL_JUDGE_MODEL", "gpt-4o")
+    key = (key or "").strip()          # stray whitespace/newline from a pasted env var
+    if key.lower().startswith("bearer "):
+        key = key[7:].strip()          # tolerate a key pasted WITH the prefix
     payload = {"model": model, "max_tokens": max_tokens,
                "messages": [{"role": "system", "content": system},
                             {"role": "user", "content": user}]}
     req = urllib.request.Request(
         base + "/chat/completions", data=json.dumps(payload).encode(),
-        headers={"Content-Type": "application/json", "Authorization": f"Bearer {key}"})
-    with urllib.request.urlopen(req, timeout=180) as r:
-        return json.loads(r.read())["choices"][0]["message"]["content"]
+        headers={"Content-Type": "application/json",
+                 "Authorization": f"Bearer {key}",
+                 # Default urllib UA ("Python-urllib/3.x") is blocked with a bare
+                 # 403 by Cloudflare-fronted APIs. Identify ourselves properly.
+                 "User-Agent": "retriEVAL/1.0 (+https://retrieval-mcp.com)",
+                 "Accept": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=180) as r:
+            return json.loads(r.read())["choices"][0]["message"]["content"]
+    except urllib.error.HTTPError as e:
+        # urllib's str() drops the response body, which is where providers put
+        # the real reason. Surface it so failures are diagnosable.
+        try:
+            detail = e.read().decode("utf-8", "replace")[:400]
+        except Exception:
+            detail = ""
+        raise RuntimeError(f"judge HTTP {e.code} from {base}: {detail or e.reason}") from None
 
 
 def get_judge():
