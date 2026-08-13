@@ -64,7 +64,13 @@ class BearerAuth(BaseHTTPMiddleware):
     """
 
     async def dispatch(self, request, call_next):
-        if request.url.path in PUBLIC_PATHS:
+        path = request.url.path
+        # OAuth discovery probes must NOT be answered with 401. A 401 tells the
+        # client "there is a sign-in service here", so it then attempts dynamic
+        # client registration and fails. Letting these fall through to a plain
+        # 404 tells the client there is no OAuth, and it proceeds with the
+        # credential already in the URL/header.
+        if path in PUBLIC_PATHS or path.startswith("/.well-known/"):
             return await call_next(request)
         if TOKEN:
             header = request.headers.get("authorization", "")
