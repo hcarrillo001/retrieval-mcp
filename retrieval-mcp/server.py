@@ -35,7 +35,7 @@ CUSTOM_METRICS: dict[str, list] = {}  # name -> evaluation_steps
 
 # Hard ceilings for the PUBLIC sandbox (defense-in-depth; the /api layer caps too)
 SANDBOX_MAX_CASES = int(os.environ.get("SANDBOX_MAX_CASES", "3"))
-SANDBOX_MAX_CHARS = int(os.environ.get("SANDBOX_MAX_CHARS", "2000"))
+SANDBOX_MAX_CHARS = int(os.environ.get("SANDBOX_MAX_CHARS", "8000"))
 SANDBOX_ALLOWED_METRICS = {"faithfulness", "answer_relevancy", "hallucination",
                            "contextual_relevancy"}
 
@@ -49,20 +49,33 @@ def run_sandbox_eval(cases: list, metric: str, model_id: str,
         return {"error": "metric_not_allowed", "allowed": sorted(SANDBOX_ALLOWED_METRICS)}
     if not isinstance(cases, list) or not cases:
         return {"error": "no_cases"}
+    dropped_cases = len(cases) if len(cases) > SANDBOX_MAX_CASES else 0
     cases = cases[:SANDBOX_MAX_CASES]
 
-    def clip(v):
+    truncated = []  # fields we had to shorten — reported back, never silent
+
+    def clip(v, field):
         if isinstance(v, list):
-            return [str(x)[:SANDBOX_MAX_CHARS] for x in v][:8]
-        return str(v or "")[:SANDBOX_MAX_CHARS]
+            out = []
+            for x in v[:8]:
+                s = str(x)
+                if len(s) > SANDBOX_MAX_CHARS:
+                    truncated.append(field)
+                out.append(s[:SANDBOX_MAX_CHARS])
+            return out
+        s = str(v or "")
+        if len(s) > SANDBOX_MAX_CHARS:
+            truncated.append(field)
+        return s[:SANDBOX_MAX_CHARS]
 
     clean = []
     for c in cases:
         clean.append({
-            "input": clip(c.get("input")),
-            "actual_output": clip(c.get("actual_output")),
-            "expected_output": clip(c.get("expected_output")),
-            "retrieval_context": clip(c.get("retrieval_context") or c.get("context") or []),
+            "input": clip(c.get("input"), "input"),
+            "actual_output": clip(c.get("actual_output"), "actual_output"),
+            "expected_output": clip(c.get("expected_output"), "expected_output"),
+            "retrieval_context": clip(c.get("retrieval_context") or c.get("context") or [],
+                                      "retrieval_context"),
         })
 
     full, scores = [], []
@@ -89,9 +102,19 @@ def run_sandbox_eval(cases: list, metric: str, model_id: str,
         "mean_score": round(statistics.mean(scores), 4),
         "pass_rate": round(sum(s >= threshold for s in scores) / len(scores), 4),
         "n": len(scores)}}
-    return {"golden_set": "sandbox", "threshold": threshold,
-            "judge_model": SANDBOX_PRESETS.get(model_id, {}).get("model", model_id),
-            "aggregate": aggregate, "per_case": full, "total_cases": len(full)}
+    out = {"golden_set": "sandbox", "threshold": threshold,
+           "judge_model": SANDBOX_PRESETS.get(model_id, {}).get("model", model_id),
+           "aggregate": aggregate, "per_case": full, "total_cases": len(full)}
+    notes = []
+    if truncated:
+        notes.append(f"Shortened to {SANDBOX_MAX_CHARS} chars: "
+                     f"{', '.join(sorted(set(truncated)))}. Scores reflect the "
+                     f"shortened text — run it locally or via MCP for the full length.")
+    if dropped_cases:
+        notes.append(f"Only the first {SANDBOX_MAX_CASES} of {dropped_cases} cases were scored.")
+    if notes:
+        out["notice"] = " ".join(notes)
+    return out
 
 
 def _run_metric(name: str, case: dict, threshold: float) -> dict:

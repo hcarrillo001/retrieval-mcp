@@ -46,7 +46,7 @@ const SAMPLES = {
   },
 };
 const ALLOWED_METRICS = ["faithfulness", "answer_relevancy", "hallucination", "contextual_relevancy"];
-const MAX_CHARS = 2000;
+const MAX_CHARS = 8000;   // keep in sync with SANDBOX_MAX_CHARS on the server
 
 function clientIp(req) {
   const xf = req.headers["x-forwarded-for"];

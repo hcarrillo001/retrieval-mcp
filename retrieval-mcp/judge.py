@@ -243,7 +243,7 @@ def _openai(system: str, user: str, max_tokens: int = 1024) -> str:
     req = urllib.request.Request(
         base + "/chat/completions", data=json.dumps(payload).encode(),
         headers={"Content-Type": "application/json", "Authorization": f"Bearer {key}"})
-    with urllib.request.urlopen(req, timeout=60) as r:
+    with urllib.request.urlopen(req, timeout=180) as r:
         return json.loads(r.read())["choices"][0]["message"]["content"]
 
 
@@ -256,5 +256,27 @@ def get_judge():
     return {"ollama": _ollama, "openai": _openai}.get(backend, _anthropic)
 
 
+# Ceiling for a judge's JSON reply. Long outputs yield long replies (one entry
+# per extracted claim), so the budget scales with the prompt up to this cap.
+JUDGE_MAX_TOKENS_CAP = int(os.environ.get("RETRIEVAL_JUDGE_MAX_TOKENS", "8192"))
+
+
 def judge_json(system: str, user: str, max_tokens: int = 1024) -> dict:
-    return _extract_json(get_judge()(system, user, max_tokens))
+    """Ask the judge for JSON.
+
+    A fixed 1024-token reply budget silently truncates the JSON on long inputs,
+    which then fails to parse. So: scale the budget with the prompt size, and if
+    the reply still comes back cut off mid-JSON, retry once with a bigger budget
+    before giving up.
+    """
+    est = len(system) + len(user)
+    budget = max(max_tokens, min(JUDGE_MAX_TOKENS_CAP, est // 3))
+    fn = get_judge()
+    raw = fn(system, user, budget)
+    try:
+        return _extract_json(raw)
+    except (json.JSONDecodeError, ValueError):
+        retry = min(JUDGE_MAX_TOKENS_CAP, max(budget * 3, 4096))
+        if retry <= budget:
+            raise  # already at the cap; a bigger budget won't help
+        return _extract_json(fn(system, user, retry))

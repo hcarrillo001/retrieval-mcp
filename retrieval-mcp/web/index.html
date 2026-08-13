@@ -173,9 +173,70 @@
   #sbx .sb-actions{padding:13px 15px;display:flex;gap:9px;}
   #sbx .sb-actions button{flex:1;border:1px solid var(--line);background:var(--card);color:var(--ink);font-size:13px;padding:9px;border-radius:9px;cursor:pointer;font-family:var(--ui);}
   #sbx .sb-err{padding:16px;color:var(--fail-ink);background:var(--fail-soft);border-radius:10px;font-size:13px;margin-top:16px;}
+
+  /* ===== modern glass + aurora (Cursor/Devin-style, light) ===== */
+  body{position:relative;}
+  .aurora{position:absolute;inset:0 0 auto 0;height:1200px;overflow:hidden;pointer-events:none;z-index:-1;}
+  .aurora::before,.aurora::after{content:"";position:absolute;border-radius:50%;filter:blur(90px);}
+  .aurora::before{width:760px;height:760px;top:-280px;left:50%;transform:translateX(-72%);
+    background:radial-gradient(closest-side,rgba(37,99,235,.20),rgba(124,58,237,.10),transparent 70%);}
+  .aurora::after{width:640px;height:640px;top:120px;left:50%;transform:translateX(6%);
+    background:radial-gradient(closest-side,rgba(6,182,212,.14),rgba(37,99,235,.08),transparent 70%);}
+  h1 .accent{background:linear-gradient(92deg,#2563EB,#7C3AED 60%,#06B6D4);-webkit-background-clip:text;background-clip:text;color:transparent;}
+
+  /* ===== embedded live sandbox: enlarged glass panel ===== */
+  #sandbox{padding-top:6px;}
+  #sbx{max-width:880px;margin:0 auto;}
+  #sbx .sb-panel,#sbx .sb-card{
+    background:rgba(255,255,255,.68);
+    -webkit-backdrop-filter:blur(18px) saturate(1.4);backdrop-filter:blur(18px) saturate(1.4);
+    border:1px solid rgba(255,255,255,.85);
+    box-shadow:0 1px 2px rgba(24,24,27,.04),0 12px 40px -12px rgba(37,99,235,.18),inset 0 1px 0 rgba(255,255,255,.9);
+  }
+  #sbx .sb-panel{padding:24px;border-radius:18px;}
+  #sbx .sb-card{border-radius:18px;}
+  #sbx .sb-run{padding:14px;font-size:15px;border-radius:12px;
+    background:linear-gradient(92deg,#2563EB,#4F46E5);
+    box-shadow:0 8px 24px -8px rgba(37,99,235,.55),inset 0 1px 0 rgba(255,255,255,.25);
+    transition:transform .12s ease,box-shadow .12s ease;}
+  #sbx .sb-run:hover{transform:translateY(-1px);box-shadow:0 12px 28px -8px rgba(37,99,235,.6),inset 0 1px 0 rgba(255,255,255,.25);}
+  #sbx .sb-chip{background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);transition:border-color .12s,background .12s;}
+  #sbx .sb-chip.on{background:var(--blue-soft);}
+
+  /* sample preview: what you are about to score */
+  #sbx .sb-preview{border:1px solid rgba(37,99,235,.16);background:rgba(239,244,254,.55);border-radius:14px;padding:13px 14px;margin-bottom:16px;}
+  #sbx .sb-preview .pv-title{font-size:10.5px;font-weight:600;color:var(--blue);text-transform:uppercase;letter-spacing:.05em;margin-bottom:9px;}
+  #sbx .sb-preview .pv-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px;}
+  #sbx .sb-preview .pv-col{background:rgba(255,255,255,.8);border:1px solid var(--line);border-radius:10px;padding:9px 10px;min-width:0;}
+  #sbx .sb-preview .pv-col .l{font-size:9.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--faint);margin-bottom:5px;}
+  #sbx .sb-preview .pv-col .v{font-size:12px;line-height:1.5;overflow-wrap:anywhere;}
+  #sbx .sb-preview .pv-note{font-size:11px;color:var(--muted);margin:9px 0 0;}
+  #sbx .sb-preview .pv-mk{padding:0 3px;border-radius:3px;background:var(--fail-soft);color:var(--fail-ink);}
+  @media(max-width:720px){#sbx .sb-preview .pv-grid{grid-template-columns:1fr;}}
+
+  /* thinking state: shimmer sweep + pulsing skeleton (the judge at work) */
+  #sbx .sb-think{padding:30px 0;text-align:center;}
+  #sbx .sb-think .tx{font-size:14px;font-weight:500;display:inline-block;
+    background:linear-gradient(90deg,#A1A1AA 0%,#18181B 45%,#2563EB 50%,#18181B 55%,#A1A1AA 100%);
+    background-size:220% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;
+    animation:sbshine 1.6s linear infinite;}
+  #sbx .sb-skel{max-width:420px;margin:16px auto 0;display:flex;flex-direction:column;gap:8px;}
+  #sbx .sb-skel i{display:block;height:9px;border-radius:99px;
+    background:linear-gradient(90deg,var(--soft) 25%,#E9EDF6 50%,var(--soft) 75%);
+    background-size:200% 100%;animation:sbshine 1.4s linear infinite;}
+  #sbx .sb-skel i:nth-child(2){width:82%;margin:0 auto;}
+  #sbx .sb-skel i:nth-child(3){width:64%;margin:0 auto;}
+  @keyframes sbshine{from{background-position:200% 0}to{background-position:-20% 0}}
+  @media (prefers-reduced-motion:reduce){
+    #sbx .sb-think .tx,#sbx .sb-skel i{animation:none;background:none;color:var(--muted);-webkit-text-fill-color:currentColor;}
+    #sbx .sb-run{transition:none;}
+  }
+  #sbx .sb-notice{border:1px solid rgba(217,119,6,.28);background:rgba(255,251,235,.85);color:#B45309;
+    border-radius:12px;padding:10px 13px;font-size:12.5px;line-height:1.5;margin-bottom:12px;}
 </style>
 </head>
 <body>
+<div class="aurora" aria-hidden="true"></div>
 
 <nav class="nav"><div class="wrap row">
   <a class="brand" href="/">
@@ -196,31 +257,64 @@
 
 <header class="hero"><div class="wrap">
   <span class="badge">open source · local-first · MCP</span>
-  <h1>Evals for AI systems,<br><span class="accent">as an MCP.</span></h1>
-  <p class="sub">retriEVAL is a local-first LLM-evaluation server you connect to Claude, Cursor, or CI.
-  It scores RAG <strong>by stage</strong>, telling retriever failures apart from generator failures,
-  authors metrics from plain language, and tracks every run with charts and history.
-  Bring your own model: run free on Ollama, or use your Claude, OpenAI, or any LLM key.</p>
-  <div class="btns">
-    <a class="btn primary" href="#sandbox">Try it live →</a>
-    <a class="btn" href="#quickstart">Quickstart</a>
-    <a class="btn" href="/dashboard">Live dashboard</a>
-    <a class="btn" href="https://github.com/hcarrillo001/retrieval-mcp">View on GitHub</a>
-  </div>
+  <h1>Evals for AI systems, <span class="accent">as an MCP.</span></h1>
+  <p class="sub">A local-first LLM-eval server for Claude, Cursor, or CI — score RAG <strong>by stage</strong>, author metrics in plain language, track every run. Try a real eval below, no signup.</p>
+</div></header>
 
+<section id="sandbox"><div class="wrap">
+  <h2>Try it live</h2>
+  <p class="lead">Run a real eval right here, no signup. Pick a sample (or paste your own input, context, and output), choose a free judge model, and watch retriEVAL score it. Nothing is saved.</p>
+  <div id="sbx">
+    <div class="sb-panel" id="sbSetup">
+      <div class="sb-lbl">1 · Choose a sample</div>
+      <div class="sb-chips" id="sbSamples">
+        <button class="sb-chip on" data-s="halluc">Hallucination</button>
+        <button class="sb-chip" data-s="clean">All-pass</button>
+        <button class="sb-chip" data-s="mixed">Mixed (3 cases)</button>
+        <button class="sb-chip dim" data-s="custom">Paste your own</button>
+      </div>
+      <div class="sb-preview" id="sbPreview"></div>
+      <div class="sb-custom sb-hide" id="sbCustom">
+        <textarea id="sbInput" placeholder="Question / input"></textarea>
+        <textarea id="sbContext" placeholder="Retrieved context — simulates your RAG retrieval step"></textarea>
+        <textarea id="sbOutput" placeholder="Model output (what the system answered)"></textarea>
+      </div>
+      <div class="sb-lbl">2 · Metric</div>
+      <div class="sb-chips" id="sbMetrics">
+        <button class="sb-chip on" data-m="faithfulness">faithfulness</button>
+        <button class="sb-chip dim" data-m="answer_relevancy">answer_relevancy</button>
+        <button class="sb-chip dim" data-m="hallucination">hallucination</button>
+      </div>
+      <div class="sb-lbl">3 · Judge model</div>
+      <select id="sbModel">
+        <option value="groq-llama">Llama 3.3 70B · via Groq (free)</option>
+        <option value="gemini-flash">Gemini 2.5 Flash · Google (free)</option>
+        <option value="qwen-72b">Qwen 2.5 72B · via OpenRouter (free)</option>
+        <option value="deepseek">DeepSeek V3 · via OpenRouter (free)</option>
+        <option value="ollama-cloud">gpt-oss 20B · Ollama Cloud (free)</option>
+      </select>
+      <button class="sb-run" id="sbRun">Run sample eval</button>
+      <p class="sb-foot" id="sbFoot">Runs on a free model · nothing is saved · limited per day</p>
+    </div>
+    <div class="sb-think sb-hide" id="sbLoading"><span class="tx" id="sbThinkTx">Sending to the judge model…</span><div class="sb-skel"><i></i><i></i><i></i></div></div>
+    <div id="sbResult"></div>
+  </div>
+</div></section>
+
+<section id="loop"><div class="wrap">
   <div class="flow">
     <div class="cap">The loop: score your AI's outputs, track them, improve</div>
     <div class="steps">
       <div class="step"><div class="n">01 · Collect</div><div class="t">Outputs</div><div class="d">from your app or RAG</div></div>
-      <div class="arrow">→</div>
+      <div class="arrow">&#8594;</div>
       <div class="step"><div class="n">02 · Score</div><div class="t">By stage</div><div class="d">retriever vs generator</div></div>
-      <div class="arrow">→</div>
+      <div class="arrow">&#8594;</div>
       <div class="step"><div class="n">03 · Track</div><div class="t">Charts + history</div><div class="d">on your dashboard</div></div>
-      <div class="arrow">→</div>
+      <div class="arrow">&#8594;</div>
       <div class="step"><div class="n">04 · Improve</div><div class="t">Iterate</div><div class="d">gate quality over time</div></div>
     </div>
   </div>
-</div></header>
+</div></section>
 
 <section id="how"><div class="wrap">
   <h2>What makes it different</h2>
@@ -290,44 +384,7 @@
   </div>
 </div></section>
 
-<section id="sandbox"><div class="wrap">
-  <h2>Try it live</h2>
-  <p class="lead">Run a real eval right here, no signup. Pick a sample (or paste your own input, context, and output), choose a free judge model, and watch retriEVAL score it. Nothing is saved.</p>
-  <div id="sbx">
-    <div class="sb-panel" id="sbSetup">
-      <div class="sb-lbl">1 · Choose a sample</div>
-      <div class="sb-chips" id="sbSamples">
-        <button class="sb-chip on" data-s="halluc">Hallucination</button>
-        <button class="sb-chip" data-s="clean">All-pass</button>
-        <button class="sb-chip" data-s="mixed">Mixed (3 cases)</button>
-        <button class="sb-chip dim" data-s="custom">Paste your own</button>
-      </div>
-      <div class="sb-custom sb-hide" id="sbCustom">
-        <textarea id="sbInput" placeholder="Question / input"></textarea>
-        <textarea id="sbContext" placeholder="Retrieved context — simulates your RAG retrieval step"></textarea>
-        <textarea id="sbOutput" placeholder="Model output (what the system answered)"></textarea>
-      </div>
-      <div class="sb-lbl">2 · Metric</div>
-      <div class="sb-chips" id="sbMetrics">
-        <button class="sb-chip on" data-m="faithfulness">faithfulness</button>
-        <button class="sb-chip dim" data-m="answer_relevancy">answer_relevancy</button>
-        <button class="sb-chip dim" data-m="hallucination">hallucination</button>
-      </div>
-      <div class="sb-lbl">3 · Judge model</div>
-      <select id="sbModel">
-        <option value="groq-llama">Llama 3.3 70B · via Groq (free)</option>
-        <option value="gemini-flash">Gemini 2.5 Flash · Google (free)</option>
-        <option value="qwen-72b">Qwen 2.5 72B · via OpenRouter (free)</option>
-        <option value="deepseek">DeepSeek V3 · via OpenRouter (free)</option>
-        <option value="ollama-cloud">gpt-oss 20B · Ollama Cloud (free)</option>
-      </select>
-      <button class="sb-run" id="sbRun">Run sample eval</button>
-      <p class="sb-foot" id="sbFoot">Runs on a free model · nothing is saved · limited per day</p>
-    </div>
-    <div class="sb-loading sb-hide" id="sbLoading"><div class="sb-spin"></div>Scoring with the judge model…</div>
-    <div id="sbResult"></div>
-  </div>
-</div></section>
+
 
 <section id="quickstart"><div class="wrap">
   <h2>Quickstart</h2>
@@ -427,8 +484,41 @@ Add custom connector:
     pick($("sbSamples"),"data-s",function(v){
       sample=v;$("sbCustom").classList.toggle("sb-hide",v!=="custom");
       $("sbRun").textContent=v==="custom"?"Run my eval":"Run sample eval";
+      preview(v);
     });
     pick($("sbMetrics"),"data-m",function(v){metric=v;});
+
+    // what each curated sample contains — shown before running so the
+    // input / RAG context / output relationship is clear
+    var PREVIEWS={
+      halluc:{note:"The output invents a fact the context never said — the judge should catch it.",rows:[
+        {q:"What is the Eiffel Tower made of?",c:"The Eiffel Tower is built from puddled wrought iron.",o:'The Eiffel Tower is made entirely of <span class="pv-mk">solid gold</span>.'}]},
+      clean:{note:"The output only states what the context supports — this one should pass.",rows:[
+        {q:"What is the capital of France?",c:"Paris is the capital and most populous city of France.",o:"The capital of France is Paris."}]},
+      mixed:{note:"One grounded answer, two planted hallucinations — watch the judge separate them.",rows:[
+        {q:"When was the Eiffel Tower completed?",c:"Completed in 1889 for the World's Fair.",o:"It was completed in 1889."},
+        {q:"What is the Eiffel Tower made of?",c:"Built from wrought iron.",o:'It is made entirely of <span class="pv-mk">solid gold</span>.'},
+        {q:"How many moons does Mars have?",c:"Mars has two small moons, Phobos and Deimos.",o:'Mars has <span class="pv-mk">12 moons</span>, the largest named <span class="pv-mk">Titan</span>.'}]}
+    };
+    function preview(v){
+      var p=PREVIEWS[v], el=$("sbPreview");
+      if(!p){el.classList.add("sb-hide");return;}
+      el.classList.remove("sb-hide");
+      el.innerHTML='<div class="pv-title">What you\'re scoring</div>'+
+        p.rows.map(function(r){return '<div class="pv-grid" style="margin-bottom:8px">'+
+          '<div class="pv-col"><div class="l">Input</div><div class="v">'+r.q+'</div></div>'+
+          '<div class="pv-col"><div class="l">Retrieved context · RAG simulation</div><div class="v">'+r.c+'</div></div>'+
+          '<div class="pv-col"><div class="l">Model output</div><div class="v">'+r.o+'</div></div>'+
+        '</div>';}).join("")+
+        '<p class="pv-note">'+p.note+'</p>';
+    }
+    preview(sample);
+
+    var THINK=["Sending to the judge model…","Extracting claims from the output…","Checking each claim against the context…","Writing the verdict…"];
+    var thinkTimer=null;
+    function startThink(){var i=0;$("sbThinkTx").textContent=THINK[0];
+      thinkTimer=setInterval(function(){i=(i+1)%THINK.length;$("sbThinkTx").textContent=THINK[i];},2200);}
+    function stopThink(){if(thinkTimer){clearInterval(thinkTimer);thinkTimer=null;}}
 
     function calcChips(d){
       if(!d||typeof d!=="object")return "";
@@ -470,6 +560,8 @@ Add custom connector:
         body+
         '<div class="sb-actions"><button id="sbAgain">Run another sample</button><button id="sbReset">New run (clears)</button></div></div>';
       $("sbFoot").textContent="Nothing is saved"+rem;
+      if(data.notice){$("sbResult").insertAdjacentHTML("afterbegin",
+        '<div class="sb-notice">'+esc(data.notice)+'</div>');}
       $("sbAgain").onclick=back;$("sbReset").onclick=back;
     }
     function back(){$("sbResult").innerHTML="";$("sbSetup").classList.remove("sb-hide");}
@@ -480,15 +572,15 @@ Add custom connector:
         payload.cases=[{input:$("sbInput").value,retrieval_context:[$("sbContext").value],actual_output:$("sbOutput").value}];
         if(!payload.cases[0].input&&!payload.cases[0].actual_output){alert("Add an input and a model output to score.");return;}
       } else { payload.sample=sample; }
-      $("sbSetup").classList.add("sb-hide");$("sbLoading").classList.remove("sb-hide");$("sbResult").innerHTML="";
+      $("sbSetup").classList.add("sb-hide");$("sbLoading").classList.remove("sb-hide");$("sbResult").innerHTML="";startThink();
       try{
         var r=await fetch("/api/sandbox",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(payload)});
         var data=await r.json();
-        $("sbLoading").classList.add("sb-hide");
+        stopThink();$("sbLoading").classList.add("sb-hide");
         if(!r.ok){$("sbResult").innerHTML='<div class="sb-err">'+esc(data.message||data.error||("error "+r.status))+'</div>';
           $("sbSetup").classList.remove("sb-hide");return;}
         render(data);
-      }catch(e){$("sbLoading").classList.add("sb-hide");$("sbSetup").classList.remove("sb-hide");
+      }catch(e){stopThink();$("sbLoading").classList.add("sb-hide");$("sbSetup").classList.remove("sb-hide");
         $("sbResult").innerHTML='<div class="sb-err">'+esc(String(e))+'</div>';}
     };
   })();
