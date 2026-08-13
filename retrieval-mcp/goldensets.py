@@ -67,9 +67,27 @@ def load_records(path_or_inline, fmt: str = "auto") -> list:
         data = json.loads(body)
         return [_normalize(r) for r in (data if isinstance(data, list) else [data])]
 
-    p = Path(text)
+    # Inline JSON must be handled BEFORE any filesystem probe. Path.exists() on a
+    # long string does not return False, it raises OSError [Errno 36] "File name
+    # too long", so inline golden sets used to fail once they grew past the OS
+    # path limit (~255 bytes per component).
+    stripped = text.lstrip()
+    if stripped.startswith(("[", "{")):
+        try:
+            data = json.loads(text)
+            data = data if isinstance(data, list) else [data]
+            return [_normalize(r) for r in data]
+        except json.JSONDecodeError:
+            rows = [json.loads(line) for line in text.splitlines() if line.strip()]
+            return [_normalize(r) for r in rows]
 
-    if not p.exists():
+    p = Path(text)
+    try:
+        exists = p.exists()
+    except OSError:
+        exists = False  # too long / invalid to be a path: fall through to inline
+
+    if not exists:
         # treat as inline JSON (object-per-line or a JSON array)
         try:
             data = json.loads(text)
