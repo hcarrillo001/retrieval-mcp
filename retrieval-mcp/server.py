@@ -216,6 +216,9 @@ def run_eval(golden_set: str, metrics: List[str], threshold: float = 0.7,
     Pass `generator_model` (which LLM produced the outputs) and `judge_model` (which
     LLM scored them) so the dashboard can compare across models; judge_model defaults
     to the configured judge. The run is saved to history (file or Supabase).
+    The reply includes `summary_md`, a ready-to-render markdown block with the
+    score table and a link to the run inspector: show it to the user as-is
+    rather than rewriting it, so the link and formatting survive.
     Raises if the spend cap is hit mid-run; partial spend is still metered."""
     if golden_set not in GOLDEN_SETS:
         raise ValueError(f"No golden set '{golden_set}'. Load one first.")
@@ -266,7 +269,30 @@ def run_eval(golden_set: str, metrics: List[str], threshold: float = 0.7,
     link = _dashboard_link(run_id)
     if link:
         out["view_url"] = link
+    out["summary_md"] = _summary_md(aggregate, threshold, len(full), link)
     return out
+
+
+def _summary_md(aggregate: dict, threshold: float, n_cases: int, link: str) -> str:
+    """A compact markdown block the client can render as-is.
+
+    We cannot style the client's UI, so the lever we do have is returning
+    well-formed markdown: a scannable score line, a small table, and a labelled
+    link rather than a bare URL.
+    """
+    lines = []
+    for m, a in aggregate.items():
+        score = a.get("mean_score")
+        pr = a.get("pass_rate")
+        mark = "PASS" if (score is not None and score >= threshold) else "FAIL"
+        passed = int(round((pr or 0) * n_cases))
+        lines.append(f"| {m} | **{score:.2f}** | {mark} | {passed}/{n_cases} |")
+    table = ("| metric | score | verdict | passed |\n"
+             "|---|---|---|---|\n" + "\n".join(lines))
+    out = [table, f"\n_threshold {threshold:.2f}_"]
+    if link:
+        out.append(f"\n**[Open the full run inspector]({link})**")
+    return "\n".join(out)
 
 
 @mcp.tool()
@@ -324,23 +350,27 @@ def list_runs(golden_set: str = "", last_n: int = 20) -> dict:
 @mcp.tool()
 def plot_metric_trend(metric: str, golden_set: str = "", last_n: int = 10,
                       threshold: float = 0.7, show_range: bool = True,
-                      fmt: str = "text"):
+                      fmt: str = "markdown"):
     """One metric's mean score across recent runs, with a threshold reference.
-    fmt="text" (default) returns an ASCII chart that renders in any client;
+    fmt="markdown" (default) returns a rich markdown report (tables, inline bars,
+    case strip, distribution); fmt="text" returns plain ASCII;
     fmt="image" returns a PNG line chart (only useful where images display)."""
     runs = H.load_runs(golden_set or None, last_n)
     if not runs:
         raise ValueError("No runs saved yet. Run an eval first.")
     if fmt == "image":
         return Image(data=C.trend(runs, metric, threshold, show_range), format="png")
-    return C.trend_text(runs, metric, threshold)
+    if fmt == "text":
+        return C.trend_text(runs, metric, threshold)
+    return C.trend_report_md(runs, metric, threshold)
 
 
 @mcp.tool()
 def plot_run(run_id: str = "latest", golden_set: str = "",
-             threshold: float = 0.7, fmt: str = "text"):
+             threshold: float = 0.7, fmt: str = "markdown"):
     """Every metric's mean score for a single run (default: latest).
-    fmt="text" (default) returns an ASCII bar chart that renders in any client;
+    fmt="markdown" (default) returns a rich markdown report (tables, inline bars,
+    case strip, distribution); fmt="text" returns plain ASCII;
     fmt="image" returns a PNG bar chart (only useful where images display)."""
     if run_id == "latest":
         runs = H.load_runs(golden_set or None, last_n=1)
@@ -353,14 +383,16 @@ def plot_run(run_id: str = "latest", golden_set: str = "",
             raise ValueError(f"No run '{run_id}'.")
     if fmt == "image":
         return Image(data=C.run_bars(run, threshold), format="png")
-    return C.run_bars_text(run, threshold)
+    if fmt == "text":
+        return C.run_bars_text(run, threshold)
+    return C.run_report_md(run, threshold)
 
 
 @mcp.tool()
 def compare_runs(run_ids: Optional[List[str]] = None, golden_set: str = "",
-                 last_n: int = 2, threshold: float = 0.7, fmt: str = "text"):
+                 last_n: int = 2, threshold: float = 0.7, fmt: str = "markdown"):
     """Compare several runs across all shared metrics.
-    fmt="text" (default) returns an ASCII table that renders in any client;
+    fmt="markdown" (default) returns a markdown matrix; fmt="text" returns plain ASCII;
     fmt="image" returns a PNG grouped-bar chart."""
     if run_ids:
         runs = [H.get_run(r) for r in run_ids]
@@ -371,7 +403,9 @@ def compare_runs(run_ids: Optional[List[str]] = None, golden_set: str = "",
         raise ValueError("Need at least 2 runs to compare.")
     if fmt == "image":
         return Image(data=C.compare(runs, threshold), format="png")
-    return C.compare_text(runs, threshold)
+    if fmt == "text":
+        return C.compare_text(runs, threshold)
+    return C.compare_report_md(runs, threshold)
 
 
 @mcp.tool()
