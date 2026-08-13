@@ -648,7 +648,20 @@ navChat.onclick=()=>show("chat");navDash.onclick=()=>show("dash");navRuns.onclic
   if(!sessions.length)newSession();else{currentId=sessions[0].id;renderList();renderThread();renderChatSide();}
 })();
 
-load();
+load().then(function(){
+  // deep link: ?run=<run_id> opens the inspector on that run
+  var want=new URLSearchParams(location.search).get("run");
+  if(!want)return;
+  show("runs");
+  var cards=document.querySelectorAll("#runList .runcard");
+  for(var i=0;i<cards.length;i++){
+    if((cards[i].textContent||"").indexOf(want)!==-1){
+      cards[i].classList.add("open");
+      cards[i].scrollIntoView({behavior:"smooth",block:"start"});
+      break;
+    }
+  }
+});
 </script>
 </body>
 </html>
