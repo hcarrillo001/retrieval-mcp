@@ -47,26 +47,101 @@ const SAMPLES = {
   states: {
     metric: "faithfulness",
     cases: [{
-      input: "Which US states have a capital that isn't their largest city?",
+      input: "Give me a rundown of US state capitals: which states are governed from a city that isn't their largest, and which capitals double as the biggest city?",
       retrieval_context: [
-        "Albany is the capital of New York; New York City is the state's largest city. " +
-        "Sacramento is the capital of California; Los Angeles is the largest city. " +
-        "Springfield is the capital of Illinois; Chicago is the largest city. " +
-        "Austin is the capital of Texas; Houston is the largest city. " +
-        "Tallahassee is the capital of Florida; Jacksonville is the largest city. " +
-        "Harrisburg is the capital of Pennsylvania; Philadelphia is the largest city. " +
-        "Olympia is the capital of Washington; Seattle is the largest city. " +
-        "Carson City is the capital of Nevada; Las Vegas is the largest city.",
+        "State capitals and largest cities (A through I). " +
+        "Alabama: capital Montgomery; largest city Huntsville. " +
+        "Alaska: capital Juneau; largest city Anchorage. " +
+        "Arizona: capital Phoenix; largest city Phoenix. " +
+        "Arkansas: capital Little Rock; largest city Little Rock. " +
+        "California: capital Sacramento; largest city Los Angeles. " +
+        "Colorado: capital Denver; largest city Denver. " +
+        "Connecticut: capital Hartford; largest city Bridgeport. " +
+        "Delaware: capital Dover; largest city Wilmington. " +
+        "Florida: capital Tallahassee; largest city Jacksonville. " +
+        "Georgia: capital Atlanta; largest city Atlanta. " +
+        "Hawaii: capital Honolulu; largest city Honolulu. " +
+        "Idaho: capital Boise; largest city Boise. " +
+        "Illinois: capital Springfield; largest city Chicago. " +
+        "Indiana: capital Indianapolis; largest city Indianapolis. " +
+        "Iowa: capital Des Moines; largest city Des Moines.",
+
+        "State capitals and largest cities (K through N). " +
+        "Kansas: capital Topeka; largest city Wichita. " +
+        "Kentucky: capital Frankfort; largest city Louisville. " +
+        "Louisiana: capital Baton Rouge; largest city New Orleans. " +
+        "Maine: capital Augusta; largest city Portland. " +
+        "Maryland: capital Annapolis; largest city Baltimore. " +
+        "Massachusetts: capital Boston; largest city Boston. " +
+        "Michigan: capital Lansing; largest city Detroit. " +
+        "Minnesota: capital Saint Paul; largest city Minneapolis. " +
+        "Mississippi: capital Jackson; largest city Jackson. " +
+        "Missouri: capital Jefferson City; largest city Kansas City. " +
+        "Montana: capital Helena; largest city Billings. " +
+        "Nebraska: capital Lincoln; largest city Omaha. " +
+        "Nevada: capital Carson City; largest city Las Vegas. " +
+        "New Hampshire: capital Concord; largest city Manchester. " +
+        "New Jersey: capital Trenton; largest city Newark. " +
+        "New Mexico: capital Santa Fe; largest city Albuquerque. " +
+        "New York: capital Albany; largest city New York City. " +
+        "North Carolina: capital Raleigh; largest city Charlotte. " +
+        "North Dakota: capital Bismarck; largest city Fargo.",
+
+        "State capitals and largest cities (O through W). " +
+        "Ohio: capital Columbus; largest city Columbus. " +
+        "Oklahoma: capital Oklahoma City; largest city Oklahoma City. " +
+        "Oregon: capital Salem; largest city Portland. " +
+        "Pennsylvania: capital Harrisburg; largest city Philadelphia. " +
+        "Rhode Island: capital Providence; largest city Providence. " +
+        "South Carolina: capital Columbia; largest city Charleston. " +
+        "South Dakota: capital Pierre; largest city Sioux Falls. " +
+        "Tennessee: capital Nashville; largest city Nashville. " +
+        "Texas: capital Austin; largest city Houston. " +
+        "Utah: capital Salt Lake City; largest city Salt Lake City. " +
+        "Vermont: capital Montpelier; largest city Burlington. " +
+        "Virginia: capital Richmond; largest city Virginia Beach. " +
+        "Washington: capital Olympia; largest city Seattle. " +
+        "West Virginia: capital Charleston; largest city Charleston. " +
+        "Wisconsin: capital Madison; largest city Milwaukee. " +
+        "Wyoming: capital Cheyenne; largest city Cheyenne.",
       ],
       actual_output:
-        "Many US states are governed from a city that isn't their biggest. New York's " +
-        "capital is Albany, while New York City is far larger. California's capital is " +
-        "Los Angeles, which is also its largest city. Illinois is run from Springfield, " +
-        "though Chicago dwarfs it. Texas keeps its capital in Houston. Florida's capital " +
-        "is Tallahassee, with Jacksonville the largest city. Pennsylvania is governed from " +
-        "Harrisburg, while Philadelphia is bigger. Washington's capital is Seattle. " +
-        "Nevada's capital is Carson City, though Las Vegas is much larger. Ohio's capital " +
-        "is Columbus, which is also the largest city in that state.",
+        "Across the fifty states the pattern is less intuitive than most people expect, " +
+        "and a majority of capitals are not the largest city in their state.\n\n" +
+        "Start with the clearest examples. New York is governed from Albany even though " +
+        "New York City is vastly larger. California runs from Sacramento while Los Angeles " +
+        "leads in population. Illinois is administered from Springfield despite Chicago's " +
+        "size. Texas is governed from Houston, its largest city. Florida's seat of " +
+        "government is Tallahassee, with Jacksonville the largest city. Pennsylvania is run " +
+        "from Harrisburg while Philadelphia is far bigger. Washington is governed from " +
+        "Seattle, its largest city. Nevada's capital is Carson City, with Las Vegas much " +
+        "larger. Maryland is administered from Annapolis while Baltimore leads. Missouri " +
+        "runs from Jefferson City, and Saint Louis is the largest city in the state. " +
+        "Michigan is governed from Detroit, its biggest city.\n\n" +
+        "The same split appears in smaller states. Kansas is run from Topeka while Wichita " +
+        "is larger, Kentucky from Frankfort while Louisville leads, Louisiana from Baton " +
+        "Rouge with New Orleans the largest, Maine from Augusta with Portland larger, " +
+        "Minnesota from Saint Paul with Minneapolis bigger, Montana from Helena with " +
+        "Billings larger, Nebraska from Lincoln with Omaha bigger, New Hampshire from " +
+        "Concord with Manchester larger, New Jersey from Trenton with Newark bigger, New " +
+        "Mexico from Santa Fe with Albuquerque larger, North Carolina from Raleigh with " +
+        "Charlotte bigger, North Dakota from Bismarck with Fargo larger, Oregon from Salem " +
+        "with Portland bigger, South Dakota from Pierre with Sioux Falls larger, Vermont " +
+        "from Montpelier with Burlington bigger, Virginia from Richmond with Virginia Beach " +
+        "larger, Wisconsin from Madison with Milwaukee bigger, Alabama from Birmingham, and " +
+        "Connecticut from Hartford with Bridgeport larger.\n\n" +
+        "In a smaller group the capital is also the biggest city. That is true of Phoenix " +
+        "in Arizona, Little Rock in Arkansas, Denver in Colorado, Atlanta in Georgia, " +
+        "Honolulu in Hawaii, Boise in Idaho, Indianapolis in Indiana, Des Moines in Iowa, " +
+        "Boston in Massachusetts, Jackson in Mississippi, Columbus in Ohio, Oklahoma City " +
+        "in Oklahoma, Providence in Rhode Island, Nashville in Tennessee, Salt Lake City in " +
+        "Utah, Charleston in West Virginia, and Cheyenne in Wyoming. Columbia is likewise " +
+        "both the capital and the largest city of South Carolina.\n\n" +
+        "A few capitals are unusual for other reasons. Juneau in Alaska has no road " +
+        "connection to the rest of the state and is reachable only by boat or plane. " +
+        "Montpelier is the least populous state capital, with roughly eight thousand " +
+        "residents. Sacramento was chosen during the Gold Rush because it sits at the " +
+        "confluence of two major rivers, the only state capital with that distinction.",
     }],
   },
 };
