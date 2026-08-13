@@ -44,6 +44,31 @@ const SAMPLES = {
         actual_output: "Mars has 12 moons, the largest named Titan." },
     ],
   },
+  states: {
+    metric: "faithfulness",
+    cases: [{
+      input: "Which US states have a capital that isn't their largest city?",
+      retrieval_context: [
+        "Albany is the capital of New York; New York City is the state's largest city. " +
+        "Sacramento is the capital of California; Los Angeles is the largest city. " +
+        "Springfield is the capital of Illinois; Chicago is the largest city. " +
+        "Austin is the capital of Texas; Houston is the largest city. " +
+        "Tallahassee is the capital of Florida; Jacksonville is the largest city. " +
+        "Harrisburg is the capital of Pennsylvania; Philadelphia is the largest city. " +
+        "Olympia is the capital of Washington; Seattle is the largest city. " +
+        "Carson City is the capital of Nevada; Las Vegas is the largest city.",
+      ],
+      actual_output:
+        "Many US states are governed from a city that isn't their biggest. New York's " +
+        "capital is Albany, while New York City is far larger. California's capital is " +
+        "Los Angeles, which is also its largest city. Illinois is run from Springfield, " +
+        "though Chicago dwarfs it. Texas keeps its capital in Houston. Florida's capital " +
+        "is Tallahassee, with Jacksonville the largest city. Pennsylvania is governed from " +
+        "Harrisburg, while Philadelphia is bigger. Washington's capital is Seattle. " +
+        "Nevada's capital is Carson City, though Las Vegas is much larger. Ohio's capital " +
+        "is Columbus, which is also the largest city in that state.",
+    }],
+  },
 };
 const ALLOWED_METRICS = ["faithfulness", "answer_relevancy", "hallucination", "contextual_relevancy"];
 const MAX_CHARS = 8000;   // keep in sync with SANDBOX_MAX_CHARS on the server
