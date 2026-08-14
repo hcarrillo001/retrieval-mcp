@@ -959,11 +959,38 @@ navChat.onclick=()=>show("chat");navDash.onclick=()=>show("dash");navRuns.onclic
   }
   window.renderChatSide=renderChatSide; // let load() refresh it too
 
+  // first message, cleaned up: collapse whitespace, drop filler openers and
+  // trailing punctuation, then cap — "can you please run faithfulness on my
+  // set?" becomes "run faithfulness on my set"
+  function tidyTitle(text){
+    let t=String(text||"").replace(/\s+/g," ").trim();
+    // strip repeatedly: "hey, help me ..." has two filler openers stacked
+    const filler=/^(hey|hi|hello|ok|okay|so|please|just|can you|could you|i want to|i need to|lets|let's|help me|i'd like to)\b[\s,]*/i;
+    for(let i=0;i<4&&filler.test(t);i++)t=t.replace(filler,"");
+    t=t.replace(/[?!.,:;\s]+$/,"");
+    if(!t)return "New chat";
+    t=t.charAt(0).toUpperCase()+t.slice(1);
+    return t.length>44?t.slice(0,44).replace(/\s+\S*$/,"")+"…":t;
+  }
+
+  // once an eval runs, name the chat after it: "faithfulness · bridge 0.50"
+  function evalTitle(ev){
+    if(!ev)return "";
+    const agg=ev.aggregate||{};
+    const names=Object.keys(agg);
+    if(!names.length)return "";
+    const gs=ev.golden_set||ev.label||"";
+    const sc=agg[names[0]]&&agg[names[0]].mean_score;
+    const head=names.length>1?(names.length+" metrics"):names[0];
+    const score=(typeof sc==="number")?(" "+sc.toFixed(2).replace(/^0/,"")):"";
+    return (head+(gs?(" · "+gs):"")+score).slice(0,44);
+  }
+
   // ---- send ----
   async function ask(){
     const text=box.value.trim();if(!text)return;box.value="";
     let s=cur();if(!s){newSession();s=cur();}
-    if(s.title==="New chat")s.title=text.slice(0,40);
+    if(s.title==="New chat")s.title=tidyTitle(text);
     const uhtml=esc(text);addDOM("user",uhtml);s.msgs.push({role:"user",html:uhtml,content:text});saveSessions();renderList();
     const apiHist=s.msgs.map(m=>({role:m.role,content:m.content}));
     send.disabled=true;const p=addDOM("assistant","<span class='tool'>thinking…</span>");
@@ -980,6 +1007,11 @@ navChat.onclick=()=>show("chat");navDash.onclick=()=>show("dash");navRuns.onclic
           const rid=e.run_id;
           if(rid&&s.evals.some(x=>x.run_id===rid))continue; // dedupe by run_id
           s.evals.push(e);
+        }
+        // the first eval describes the chat better than its opening line does
+        if(!s.titleLocked){
+          const t=evalTitle(evs[0]);
+          if(t){s.title=t;s.titleLocked=true;}
         }
       }
       const txt=(data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("\n");
