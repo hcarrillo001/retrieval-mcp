@@ -244,6 +244,31 @@ GOLDEN EXAMPLES OF GOOD OUTPUT (optional):
     return r["evaluation_steps"]
 
 
+# Which case fields each metric cannot run without. Scoring with these missing
+# is not a low score — it is a malformed request, and returning 0.00 with a
+# fluent explanation hides that behind something that reads like a real result.
+REQUIRES = {
+    "answer_relevancy":     ["input", "actual_output"],
+    "faithfulness":         ["actual_output", "retrieval_context|context"],
+    "hallucination":        ["actual_output", "context|retrieval_context"],
+    "contextual_precision": ["input", "retrieval_context"],
+    "contextual_recall":    ["input", "retrieval_context"],
+    "contextual_relevancy": ["input", "retrieval_context"],
+    "summarization":        ["input", "actual_output"],
+    "bias":                 ["actual_output"],
+    "toxicity":             ["actual_output"],
+}
+
+
+def missing_inputs(metric: str, case: dict) -> list:
+    """Return the required fields absent from `case` ("a|b" means either will do)."""
+    out = []
+    for spec in REQUIRES.get(metric, []):
+        if not any(case.get(f) for f in spec.split("|")):
+            out.append(spec.replace("|", " or "))
+    return out
+
+
 BUILTIN = {
     "answer_relevancy": answer_relevancy,
     "faithfulness": faithfulness,

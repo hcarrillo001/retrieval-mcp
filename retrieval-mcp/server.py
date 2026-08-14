@@ -210,6 +210,14 @@ def _save_inline(case: dict, results: dict, threshold: float,
 
 
 def _run_metric(name: str, case: dict, threshold: float) -> dict:
+    # fail loudly on a malformed case rather than spending a judge call and
+    # returning a 0.00 that is indistinguishable from a genuine failure
+    missing = M.missing_inputs(name, case)
+    if missing:
+        raise ValueError(
+            f"Metric '{name}' needs {', '.join(missing)} — not supplied for this case. "
+            f"No score was produced (this is a missing input, not a failing result)."
+        )
     if name in M.BUILTIN:
         return M.BUILTIN[name](case, judge_json, threshold=threshold)
     if name in CUSTOM_METRICS:
