@@ -216,9 +216,10 @@ def run_eval(golden_set: str, metrics: List[str], threshold: float = 0.7,
     Pass `generator_model` (which LLM produced the outputs) and `judge_model` (which
     LLM scored them) so the dashboard can compare across models; judge_model defaults
     to the configured judge. The run is saved to history (file or Supabase).
-    The reply includes `summary_md`, a ready-to-render markdown block with the
-    score table and a link to the run inspector: show it to the user as-is
-    rather than rewriting it, so the link and formatting survive.
+    IMPORTANT FOR CALLERS: the reply includes `view_url`, a link to the full
+    visual report. ALWAYS include that link in your response to the user, even
+    when you summarise everything else. `summary_md` is a ready-to-render
+    markdown block (score table + link) that can be shown verbatim.
     Raises if the spend cap is hit mid-run; partial spend is still metered."""
     if golden_set not in GOLDEN_SETS:
         raise ValueError(f"No golden set '{golden_set}'. Load one first.")
@@ -289,9 +290,10 @@ def _summary_md(aggregate: dict, threshold: float, n_cases: int, link: str) -> s
         lines.append(f"| {m} | **{score:.2f}** | {mark} | {passed}/{n_cases} |")
     table = ("| metric | score | verdict | passed |\n"
              "|---|---|---|---|\n" + "\n".join(lines))
-    out = [table, f"\n_threshold {threshold:.2f}_"]
+    out = []
     if link:
-        out.append(f"\n**[Open the full run inspector]({link})**")
+        out.append(f"**[View this run in the dashboard]({link})**\n")
+    out += [table, f"\n_threshold {threshold:.2f}_"]
     return "\n".join(out)
 
 
@@ -365,7 +367,7 @@ def plot_metric_trend(metric: str, golden_set: str = "", last_n: int = 10,
     md = C.trend_report_md(runs, metric, threshold)
     link = _dashboard_link(runs[-1].get("run_id", "")) if runs else ""
     if link:
-        md += f"\n\n**[Open the dashboard]({link})**"
+        md = f"**[View the trend in the dashboard]({link})**\n\n" + md
     return md
 
 
@@ -392,7 +394,7 @@ def plot_run(run_id: str = "latest", golden_set: str = "",
     md = C.run_report_md(run, threshold)
     link = _dashboard_link(run.get("run_id", ""))
     if link:
-        md += f"\n\n**[Open this run in the inspector]({link})**"
+        md = f"**[View this run in the dashboard]({link})**\n\n" + md
     return md
 
 
@@ -416,7 +418,7 @@ def compare_runs(run_ids: Optional[List[str]] = None, golden_set: str = "",
     md = C.compare_report_md(runs, threshold)
     link = _dashboard_link(runs[-1].get("run_id", "")) if runs else ""
     if link:
-        md += f"\n\n**[Open the latest run in the inspector]({link})**"
+        md = f"**[View these runs in the dashboard]({link})**\n\n" + md
     return md
 
 
