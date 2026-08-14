@@ -224,6 +224,18 @@
   tbody tr{transition:background .12s;}
   tbody tr:hover{background:var(--soft2,#FAFAFA);}
   th{font-weight:600;letter-spacing:.04em;text-transform:uppercase;font-size:10px;color:var(--faint);}
+  /* eval list entries in the left panel */
+  .rcount{font-size:11px;color:var(--muted);font-family:var(--mono);}
+  .runitem{padding:10px 11px;border-radius:8px;cursor:pointer;margin-bottom:3px;border:0.5px solid transparent;}
+  .runitem:hover{background:var(--soft);}
+  .runitem.active{background:var(--blue-soft);border-color:var(--blue);}
+  .runitem .ti{font-size:12.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .runitem .mt{font-size:10.5px;color:var(--muted);margin-top:3px;display:flex;justify-content:space-between;gap:8px;}
+  .runitem .sc{font-family:var(--mono);font-weight:700;}
+  .runitem .sc.pass{color:var(--pass-ink);}
+  .runitem .sc.fail{color:var(--fail-ink);}
+  .emptydetail{color:var(--muted);font-size:13px;padding:20px 2px;}
+
   /* run inspector: same card shape as the public sandbox */
   .inscard{border:0.5px solid var(--line);border-radius:14px;overflow:hidden;background:var(--card);margin-bottom:12px;}
   .inscard .chd{display:flex;align-items:center;gap:11px;padding:13px 15px;cursor:pointer;border-bottom:0.5px solid var(--line);}
@@ -349,6 +361,11 @@
     <div class="chatlist" id="chatList"></div>
   </div>
 
+  <div class="chats hide" id="runsPanel">
+    <div class="chd"><span>Evals</span><span class="rcount" id="runCount"></span></div>
+    <div class="chatlist" id="runsNav"></div>
+  </div>
+
   <div class="main">
     <div class="mhd">
       <span class="t" id="mainTitle">Ask retriEVAL</span>
@@ -375,8 +392,6 @@
     </div>
 
     <div class="view runs hide" id="viewRuns">
-      <h2>Run inspector</h2>
-      <div class="sumrow" id="runSummary"></div>
       <div id="runList"></div>
     </div>
   </div>
@@ -520,78 +535,94 @@ function linkBar(runId,text){
   return `<div class="linkbar">${LINKICON}<a class="dlink" href="${u}">${esc(text||"View this run in the dashboard")}</a></div>`;
 }
 
-function renderRuns(runs){
-  const recent=runs.slice().reverse();
-  const allCases=recent.flatMap(r=>r.per_case||[]);
-  const passed=allCases.filter(c=>casePass(c)===true).length;
-  const failed=allCases.filter(c=>casePass(c)===false).length;
-  const avgF=mean(runs.map(faith).filter(Boolean));
-  document.getElementById("runSummary").innerHTML=
-    `<div class="sum"><div class="l">All runs</div><div class="n">${runs.length}</div></div>`+
-    `<div class="sum"><div class="l">Cases passed</div><div class="n" style="color:var(--pass)">${passed}</div></div>`+
-    `<div class="sum"><div class="l">Cases failed</div><div class="n" style="color:var(--fail)">${failed}</div></div>`+
-    `<div class="sum"><div class="l">Avg faithfulness</div><div class="n">${fm(avgF)}</div></div>`;
+var RUNS=[], SELECTED=null;
 
-  // one trend chart for the whole view, rather than repeating it on every card
-  const topChart=trendSVG(runs,"faithfulness",0.7);
+// left panel: one entry per eval, newest first
+function renderRunsNav(){
+  document.getElementById("runCount").textContent=RUNS.length+(RUNS.length===1?" eval":" evals");
+  document.getElementById("runsNav").innerHTML = RUNS.map(function(r){
+    var agg=r.aggregate||{}, thr=r.threshold||0.7;
+    var names=Object.keys(agg);
+    var worst=names.length?Math.min.apply(null,names.map(function(m){
+      var v=(agg[m]||{}).mean_score; return v==null?0:v;})):null;
+    var ok=worst!=null&&worst>=thr;
+    return '<div class="runitem'+(r.run_id===SELECTED?' active':'')+'" data-run="'+esc(r.run_id||'')+'">'+
+      '<div class="ti">'+esc(r.label||r.run_id||'run')+'</div>'+
+      '<div class="mt"><span>'+esc((r.timestamp||'').slice(0,16).replace('T',' '))+'</span>'+
+      '<span class="sc '+(ok?'pass':'fail')+'">'+fm(worst)+'</span></div></div>';
+  }).join("") || '<div class="emptydetail">No evals yet.</div>';
 
-  document.getElementById("runList").innerHTML = topChart + recent.map((r,ri)=>{
-    const cases=r.per_case||[];
-    const agg=r.aggregate||{};
-    const thr=r.threshold||0.7;
-    const metricNames=Object.keys(agg);
-    const vd=runVerdict(agg,cases,thr);
-    const n=caseCount(agg,cases);
+  Array.prototype.forEach.call(document.querySelectorAll("#runsNav .runitem"),function(el){
+    el.onclick=function(){selectRun(el.getAttribute("data-run"));};
+  });
+}
 
-    // one mean meter per metric, in the sandbox's proportions
-    const meters=metricNames.map(m=>{
-      const a=agg[m]||{};const s=a.mean_score;
-      const col=s==null?"var(--faint)":(s>=thr?"var(--pass)":(s>=0.4?"var(--warn)":"var(--fail)"));
-      const tcol=s==null?"var(--muted)":(s>=thr?"var(--pass-ink)":"var(--fail-ink)");
-      const pct=Math.max(2,Math.round((s||0)*100));
-      return `<div class="mtr"><span class="mname">Mean ${esc(m)}</span>
-        <span class="mval" style="color:${tcol}">${fm(s)}</span>
-        <div class="trk"><div class="fill" style="width:${pct}%;background:${col}"></div>
-          <div class="thr" style="left:${Math.round(thr*100)}%"></div></div></div>`;
+// main pane: the selected eval, on its own
+function selectRun(runId){
+  SELECTED=runId;
+  renderRunsNav();
+  var r=RUNS.filter(function(x){return x.run_id===runId;})[0];
+  var host=document.getElementById("runList");
+  if(!r){host.innerHTML='<div class="emptydetail">Select an eval to see its detail.</div>';return;}
+
+  var cases=(r.per_case||[]).slice().sort(function(a,b){return (a.index||0)-(b.index||0);});
+  var agg=r.aggregate||{}, thr=r.threshold||0.7;
+  var metricNames=Object.keys(agg);
+  var vd=runVerdict(agg,cases,thr);
+  var n=caseCount(agg,cases);
+
+  var meters=metricNames.map(function(m){
+    var a=agg[m]||{}, sc=a.mean_score;
+    var col=sc==null?"var(--faint)":(sc>=thr?"var(--pass)":(sc>=0.4?"var(--warn)":"var(--fail)"));
+    var tcol=sc==null?"var(--muted)":(sc>=thr?"var(--pass-ink)":"var(--fail-ink)");
+    var pct=Math.max(2,Math.round((sc||0)*100));
+    return '<div class="mtr"><span class="mname">Mean '+esc(m)+'</span> '+
+      '<span class="mval" style="color:'+tcol+'">'+fm(sc)+'</span>'+
+      '<div class="trk"><div class="fill" style="width:'+pct+'%;background:'+col+'"></div>'+
+      '<div class="thr" style="left:'+Math.round(thr*100)+'%"></div></div></div>';
+  }).join("");
+
+  var body = cases.length ? cases.map(function(c,ci){
+    var cid="dc"+ci, sc=caseScore(c), pass=casePass(c)!==false;
+    var why=Object.keys(c.scores||{}).map(function(mn){
+      var res=c.scores[mn];
+      var mp=(typeof res.success==="boolean")?res.success:((res.score||0)>=thr);
+      return '<div class="why '+(mp?'pass':'fail')+'">'+
+        (metricNames.length>1?'<b>'+esc(mn)+':</b> ':'')+
+        esc(res.reason||'(no explanation recorded)')+'</div>'+calcChipsDash(res.details);
     }).join("");
+    return '<div class="case open" id="'+cid+'">'+
+      '<div class="ch" onclick="document.getElementById(\''+cid+'\').classList.toggle(\'open\')">'+
+        '<span class="pill '+(pass?'pass':'fail')+'">'+fm(sc)+' '+(pass?'pass':'fail')+'</span>'+
+        '<span class="q">'+esc(c.input||'not provided')+'</span><span class="caret">&#9654;</span></div>'+
+      '<div class="cbody"><div class="cols">'+
+        '<div class="col"><div class="l">Input</div><div class="v">'+esc(c.input||'not provided')+'</div></div>'+
+        '<div class="col"><div class="l">Retrieved context</div><div class="v">'+esc(ctxText(c))+'</div></div>'+
+        '<div class="col"><div class="l">Model output</div><div class="v">'+esc(c.actual_output||'not provided')+'</div></div>'+
+      '</div>'+why+'</div></div>';
+  }).join("") : '<div class="case"><div class="cbody" style="display:block;color:var(--muted);padding:12px 15px">No per-case detail stored for this eval.</div></div>';
 
-    const body = cases.length ? cases.map((c,ci)=>{
-      const cid=`rc${ri}c${ci}`;
-      const s=caseScore(c);const pass=casePass(c)!==false;
-      const scoreObj=c.scores||{};
-      // one reason block per metric scored on this case
-      const why=Object.entries(scoreObj).map(([mn,res])=>{
-        const mp=(typeof res.success==="boolean")?res.success:((res.score||0)>=thr);
-        return `<div class="why ${mp?'pass':'fail'}">${metricNames.length>1?`<b>${esc(mn)}:</b> `:''}${esc(res.reason||'(no explanation recorded)')}</div>
-          ${calcChipsDash(res.details)}`;}).join("");
-      return `<div class="case open" id="${cid}">
-        <div class="ch" onclick="document.getElementById('${cid}').classList.toggle('open')">
-          <span class="pill ${pass?'pass':'fail'}">${fm(s)} ${pass?'pass':'fail'}</span>
-          <span class="q">${esc(c.input||'not provided')}</span><span class="caret">&#9654;</span></div>
-        <div class="cbody">
-          <div class="cols">
-            <div class="col"><div class="l">Input</div><div class="v">${esc(c.input||'not provided')}</div></div>
-            <div class="col"><div class="l">Retrieved context</div><div class="v">${esc(ctxText(c))}</div></div>
-            <div class="col"><div class="l">Model output</div><div class="v">${esc(c.actual_output||'not provided')}</div></div>
-          </div>${why}</div></div>`;
-    }).join("") : `<div class="case"><div class="cbody" style="display:block;color:var(--muted);padding:12px 15px">No per-case detail stored for this run.</div></div>`;
+  var url=runURL(r.run_id);
+  host.innerHTML='<div class="card inscard open" data-run="'+esc(r.run_id||'')+'">'+
+    '<div class="chd">'+
+      '<span class="cic">'+RULER_D+'</span>'+
+      '<div style="flex:1;min-width:0">'+
+        '<div style="font-weight:600;font-size:13.5px">'+esc(r.label||r.run_id||'run')+'</div>'+
+        '<div style="font-size:11px;color:var(--faint);margin-top:2px">'+
+          esc((r.timestamp||'').slice(0,16).replace('T',' '))+' &middot; '+esc(r.golden_set||'')+
+          ' &middot; '+n+' case'+(n===1?'':'s')+' &middot; '+esc(r.judge_model||'no judge recorded')+
+          (url?' &middot; <a class="dlink" href="'+url+'">open</a>':'')+
+        '</div></div>'+
+      '<span class="verd '+(vd.bad?'fail':'pass')+'">'+(vd.bad?'Needs review':'All pass')+'</span>'+
+    '</div><div class="insbody">'+meters+body+'</div></div>';
+}
 
-    const url=runURL(r.run_id);
-    return `<div class="card inscard" id="rc${ri}" data-run="${esc(r.run_id||'')}">
-      <div class="chd" onclick="document.getElementById('rc${ri}').classList.toggle('open')">
-        <span class="cic">${RULER_D}</span>
-        <div style="flex:1;min-width:0">
-          <div style="font-weight:600;font-size:13.5px">${esc(r.label||r.run_id||'run')}</div>
-          <div style="font-size:11px;color:var(--faint);margin-top:2px">
-            ${esc((r.timestamp||'').slice(0,16).replace('T',' '))} &middot; ${esc(r.golden_set||'')} &middot; ${n} case${n===1?'':'s'} &middot; ${esc(r.judge_model||'no judge recorded')}
-            ${url?` &middot; <a class="dlink" href="${url}" onclick="event.stopPropagation()">open</a>`:''}
-          </div>
-        </div>
-        <span class="verd ${vd.bad?'fail':'pass'}">${vd.bad?'Needs review':'All pass'}</span>
-      </div>
-      <div class="insbody">${meters}${body}</div>
-    </div>`;
-  }).join("") || `<div style="color:var(--muted)">No runs yet. Run an eval to see it here.</div>`;
+function renderRuns(runs){
+  RUNS=runs.slice().reverse();
+  if(!SELECTED||!RUNS.some(function(r){return r.run_id===SELECTED;}))
+    SELECTED=RUNS.length?RUNS[0].run_id:null;
+  renderRunsNav();
+  selectRun(SELECTED);
 }
 
 // calculation chips from a metric's details object
@@ -714,7 +745,10 @@ function show(view){
   navChat.classList.toggle("active",isChat);
   navDash.classList.toggle("active",isDash);
   navRuns.classList.toggle("active",isRuns);
-  document.getElementById("mainTitle").textContent=isChat?"Ask retriEVAL":(isRuns?"Run inspector":"Dashboard");
+  // the left panel belongs to whichever view is active
+  document.getElementById("chatsPanel").classList.toggle("hide",isRuns);
+  document.getElementById("runsPanel").classList.toggle("hide",!isRuns);
+  document.getElementById("mainTitle").textContent=isChat?"Ask retriEVAL":(isRuns?"Evals":"Dashboard");
 }
 navChat.onclick=()=>show("chat");navDash.onclick=()=>show("dash");navRuns.onclick=()=>show("runs");
 
@@ -971,16 +1005,16 @@ load().then(function(){
   show("runs");
   // match on the id we stamped on the card, not on its visible text:
   // a labelled run never shows its run_id, so a text match would miss it
-  var card=document.querySelector('#runList .inscard[data-run="'+want.replace(/"/g,'')+'"]');
-  if(!card){
-    var note=document.getElementById("runSummary");
-    if(note)note.insertAdjacentHTML("afterend",
-      '<div style="color:var(--muted);font-size:12.5px;margin-bottom:10px">'+
-      'Run <code>'+want.replace(/[&<>]/g,"")+'</code> is not in the loaded history.</div>');
+  if(RUNS.some(function(r){return r.run_id===want;})){
+    selectRun(want);
+    var item=document.querySelector('#runsNav .runitem[data-run="'+want.replace(/"/g,'')+'"]');
+    if(item)item.scrollIntoView({block:"nearest"});
     return;
   }
-  card.classList.add("open");
-  card.scrollIntoView({behavior:"smooth",block:"start"});
+  // unknown id: say so in the detail pane rather than silently showing another eval
+  document.getElementById("runList").innerHTML=
+    '<div class="emptydetail">Eval <code>'+want.replace(/[&<>]/g,"")+
+    '</code> is not in the loaded history.</div>';
 });
 </script>
 </body>
