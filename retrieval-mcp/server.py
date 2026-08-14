@@ -158,6 +158,31 @@ def _dashboard_link(run_id: str) -> str:
     return f"{base}/dashboard{q}"
 
 
+def _dashboard_home(view: str = "") -> str:
+    """Link to the dashboard itself (no particular run), e.g. the runs list."""
+    base = os.environ.get("RETRIEVAL_DASHBOARD_URL", "").rstrip("/")
+    if not base:
+        return ""
+    key = os.environ.get("DASH_TOKEN", "")
+    parts = []
+    if view:
+        parts.append(f"view={view}")
+    if key:
+        parts.append(f"key={key}")
+    q = ("?" + "&".join(parts)) if parts else ""
+    return f"{base}/dashboard{q}"
+
+
+def _link_line(url: str, label: str) -> str:
+    """A labelled markdown link on its own line.
+
+    Every tool that has somewhere to point should lead with one of these:
+    clients render a markdown link as a link, and putting it first means it
+    survives a client that paraphrases the rest of the output.
+    """
+    return f"**[{label}]({url})**\n" if url else ""
+
+
 def _run_metric(name: str, case: dict, threshold: float) -> dict:
     if name in M.BUILTIN:
         return M.BUILTIN[name](case, judge_json, threshold=threshold)
@@ -292,7 +317,7 @@ def _summary_md(aggregate: dict, threshold: float, n_cases: int, link: str) -> s
              "|---|---|---|---|\n" + "\n".join(lines))
     out = []
     if link:
-        out.append(f"**[View this run in the dashboard]({link})**\n")
+        out.append(_link_line(link, "View this run in the dashboard"))
     out += [table, f"\n_threshold {threshold:.2f}_"]
     return "\n".join(out)
 
@@ -309,8 +334,15 @@ def show_run_cases(run_id: str = "latest", offset: int = 0, limit: int = 10,
     if metric:
         rows = sorted(rows, key=lambda r: r["scores"].get(metric, {}).get("score", 1.0))
     window = rows[offset:offset + limit]
-    return {"run_id": run["run_id"], "total_cases": len(rows),
-            "offset": offset, "returned": len(window), "per_case": window}
+    link = _dashboard_link(run["run_id"])
+    out = {"run_id": run["run_id"], "total_cases": len(rows),
+           "offset": offset, "returned": len(window), "per_case": window}
+    if link:
+        out["view_url"] = link
+        out["summary_md"] = (_link_line(link, "Open this run in the dashboard")
+                             + f"\nShowing cases {offset + 1}-{offset + len(window)} "
+                               f"of {len(rows)}.")
+    return out
 
 
 @mcp.tool()
@@ -342,11 +374,18 @@ def evaluate_case(input: str, actual_output: str, metrics: List[str],
 def list_runs(golden_set: str = "", last_n: int = 20) -> dict:
     """List saved runs (most recent last) with their per-metric mean scores."""
     runs = H.load_runs(golden_set or None, last_n)
-    return {"runs": [
+    out = {"runs": [
         {"run_id": r["run_id"], "label": r["label"], "timestamp": r["timestamp"],
          "golden_set": r["golden_set"],
+         "view_url": _dashboard_link(r["run_id"]),
          "means": {m: a["mean_score"] for m, a in r["aggregate"].items()}}
         for r in runs]}
+    link = _dashboard_home("runs")
+    if link:
+        out["view_url"] = link
+        out["summary_md"] = (_link_line(link, "Browse all runs in the dashboard")
+                             + f"\n{len(runs)} run(s) saved.")
+    return out
 
 
 @mcp.tool()
@@ -367,7 +406,7 @@ def plot_metric_trend(metric: str, golden_set: str = "", last_n: int = 10,
     md = C.trend_report_md(runs, metric, threshold)
     link = _dashboard_link(runs[-1].get("run_id", "")) if runs else ""
     if link:
-        md = f"**[View the trend in the dashboard]({link})**\n\n" + md
+        md = _link_line(link, "View the trend in the dashboard") + "\n" + md
     return md
 
 
@@ -394,7 +433,7 @@ def plot_run(run_id: str = "latest", golden_set: str = "",
     md = C.run_report_md(run, threshold)
     link = _dashboard_link(run.get("run_id", ""))
     if link:
-        md = f"**[View this run in the dashboard]({link})**\n\n" + md
+        md = _link_line(link, "View this run in the dashboard") + "\n" + md
     return md
 
 
@@ -418,7 +457,7 @@ def compare_runs(run_ids: Optional[List[str]] = None, golden_set: str = "",
     md = C.compare_report_md(runs, threshold)
     link = _dashboard_link(runs[-1].get("run_id", "")) if runs else ""
     if link:
-        md = f"**[View these runs in the dashboard]({link})**\n\n" + md
+        md = _link_line(link, "View these runs in the dashboard") + "\n" + md
     return md
 
 
