@@ -362,7 +362,11 @@ def plot_metric_trend(metric: str, golden_set: str = "", last_n: int = 10,
         return Image(data=C.trend(runs, metric, threshold, show_range), format="png")
     if fmt == "text":
         return C.trend_text(runs, metric, threshold)
-    return C.trend_report_md(runs, metric, threshold)
+    md = C.trend_report_md(runs, metric, threshold)
+    link = _dashboard_link(runs[-1].get("run_id", "")) if runs else ""
+    if link:
+        md += f"\n\n**[Open the dashboard]({link})**"
+    return md
 
 
 @mcp.tool()
@@ -385,7 +389,11 @@ def plot_run(run_id: str = "latest", golden_set: str = "",
         return Image(data=C.run_bars(run, threshold), format="png")
     if fmt == "text":
         return C.run_bars_text(run, threshold)
-    return C.run_report_md(run, threshold)
+    md = C.run_report_md(run, threshold)
+    link = _dashboard_link(run.get("run_id", ""))
+    if link:
+        md += f"\n\n**[Open this run in the inspector]({link})**"
+    return md
 
 
 @mcp.tool()
@@ -405,7 +413,11 @@ def compare_runs(run_ids: Optional[List[str]] = None, golden_set: str = "",
         return Image(data=C.compare(runs, threshold), format="png")
     if fmt == "text":
         return C.compare_text(runs, threshold)
-    return C.compare_report_md(runs, threshold)
+    md = C.compare_report_md(runs, threshold)
+    link = _dashboard_link(runs[-1].get("run_id", "")) if runs else ""
+    if link:
+        md += f"\n\n**[Open the latest run in the inspector]({link})**"
+    return md
 
 
 @mcp.tool()
