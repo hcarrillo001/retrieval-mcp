@@ -564,7 +564,7 @@ function renderRuns(runs){
         const mp=(typeof res.success==="boolean")?res.success:((res.score||0)>=thr);
         return `<div class="why ${mp?'pass':'fail'}">${metricNames.length>1?`<b>${esc(mn)}:</b> `:''}${esc(res.reason||'(no explanation recorded)')}</div>
           ${calcChipsDash(res.details)}`;}).join("");
-      return `<div class="case" id="${cid}">
+      return `<div class="case open" id="${cid}">
         <div class="ch" onclick="document.getElementById('${cid}').classList.toggle('open')">
           <span class="pill ${pass?'pass':'fail'}">${fm(s)} ${pass?'pass':'fail'}</span>
           <span class="q">${esc(c.input||'not provided')}</span><span class="caret">&#9654;</span></div>
