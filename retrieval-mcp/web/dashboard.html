@@ -224,6 +224,45 @@
   tbody tr{transition:background .12s;}
   tbody tr:hover{background:var(--soft2,#FAFAFA);}
   th{font-weight:600;letter-spacing:.04em;text-transform:uppercase;font-size:10px;color:var(--faint);}
+  /* run inspector: same card shape as the public sandbox */
+  .inscard{border:0.5px solid var(--line);border-radius:14px;overflow:hidden;background:var(--card);margin-bottom:12px;}
+  .inscard .chd{display:flex;align-items:center;gap:11px;padding:13px 15px;cursor:pointer;border-bottom:0.5px solid var(--line);}
+  .inscard .chd:hover{background:var(--paper);}
+  .inscard .cic{width:30px;height:30px;border-radius:9px;background:var(--blue-soft);color:var(--blue);
+    display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .inscard .cic svg{width:16px;height:16px;}
+  .inscard .verd{font-size:11.5px;font-weight:600;padding:4px 11px;border-radius:99px;white-space:nowrap;}
+  .inscard .verd.pass{background:var(--pass-soft);color:var(--pass-ink);}
+  .inscard .verd.fail{background:var(--fail-soft);color:var(--fail-ink);}
+  .inscard .insbody{display:none;}
+  .inscard.open .insbody{display:block;}
+  .inscard .mtr{padding:13px 15px;border-bottom:0.5px solid var(--line);}
+  .inscard .mname{font-size:12px;color:var(--muted);}
+  .inscard .mval{font-family:var(--display);font-size:22px;font-variant-numeric:tabular-nums;line-height:1;}
+  .inscard .trk{position:relative;height:7px;background:var(--soft);border-radius:99px;overflow:hidden;margin-top:8px;}
+  .inscard .fill{position:absolute;left:0;top:0;bottom:0;border-radius:99px;}
+  .inscard .thr{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--faint);}
+  .inscard .case{border-bottom:0.5px solid var(--line);}
+  .inscard .case:last-child{border-bottom:0;}
+  .inscard .ch{display:flex;align-items:center;gap:10px;padding:12px 15px;cursor:pointer;}
+  .inscard .ch:hover{background:var(--paper);}
+  .inscard .q{font-size:13px;font-weight:500;flex:1;min-width:0;}
+  .inscard .caret{color:var(--faint);font-size:11px;transition:transform .15s;}
+  .inscard .case.open .caret{transform:rotate(90deg);}
+  .inscard .cbody{display:none;padding:0 15px 14px;}
+  .inscard .case.open .cbody{display:block;}
+  .inscard .cols{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px;margin-bottom:10px;}
+  .inscard .col{background:var(--paper);border:0.5px solid var(--line);border-radius:10px;padding:10px 11px;min-width:0;}
+  .inscard .col .l{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--faint);margin-bottom:6px;}
+  .inscard .col .v{font-size:12.5px;line-height:1.5;overflow-wrap:anywhere;}
+  .inscard .why{font-size:12.5px;line-height:1.55;padding:9px 11px;border-radius:9px;margin-bottom:8px;}
+  .inscard .why.pass{background:var(--pass-soft);color:var(--pass-ink);}
+  .inscard .why.fail{background:var(--fail-soft);color:var(--fail-ink);}
+  .inscard .pill{font-family:var(--mono);font-size:11.5px;font-weight:700;padding:3px 9px;border-radius:7px;flex-shrink:0;}
+  .inscard .pill.pass{background:var(--pass-soft);color:var(--pass-ink);}
+  .inscard .pill.fail{background:var(--fail-soft);color:var(--fail-ink);}
+  @media(max-width:1100px){.inscard .cols{grid-template-columns:1fr;}}
+
   /* score rows + trend chart, matching the landing-page format */
   .srows{display:flex;flex-direction:column;gap:7px;}
   .srow{display:flex;align-items:center;gap:10px;}
@@ -356,6 +395,7 @@
 </div></div>
 
 <script>
+const RULER_D='<svg viewBox="0 0 24 24" fill="none"><rect x="2" y="7" width="20" height="10" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M7 7v3M11 7v4M15 7v3M19 7v4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
 const COLORS=["#2563EB","#1E40AF","#60A5FA","#3B82F6","#93C5FD"];
 const SAMPLE=[
  {run_id:"r-6",timestamp:"2026-06-21",label:"v6",golden_set:"rag",generator_model:"GPT-4o",judge_model:"Claude Sonnet 4.6",aggregate:{faithfulness:{mean_score:0.91,pass_rate:0.92,n:12},answer_relevancy:{mean_score:0.94,pass_rate:0.95,n:12}}},
@@ -482,7 +522,6 @@ function linkBar(runId,text){
 
 function renderRuns(runs){
   const recent=runs.slice().reverse();
-  // summary across all runs
   const allCases=recent.flatMap(r=>r.per_case||[]);
   const passed=allCases.filter(c=>casePass(c)===true).length;
   const failed=allCases.filter(c=>casePass(c)===false).length;
@@ -493,54 +532,64 @@ function renderRuns(runs){
     `<div class="sum"><div class="l">Cases failed</div><div class="n" style="color:var(--fail)">${failed}</div></div>`+
     `<div class="sum"><div class="l">Avg faithfulness</div><div class="n">${fm(avgF)}</div></div>`;
 
-  document.getElementById("runList").innerHTML = recent.map((r,ri)=>{
+  // one trend chart for the whole view, rather than repeating it on every card
+  const topChart=trendSVG(runs,"faithfulness",0.7);
+
+  document.getElementById("runList").innerHTML = topChart + recent.map((r,ri)=>{
     const cases=r.per_case||[];
     const agg=r.aggregate||{};
     const thr=r.threshold||0.7;
     const metricNames=Object.keys(agg);
-    const rvd=runVerdict(agg,cases,thr);
-    const verdict=rvd.bad?'<span class="rv somefail">Needs review</span>'
-                         :'<span class="rv allpass">All pass</span>';
-    // score rows in the landing-page format, plus a real trend chart for this metric
-    const meters=ranLine(agg,cases,thr)+scoreRows(agg,thr)
-      +trendSVG(runs,metricNames[0]||"faithfulness",thr);
-    const heat=cases.map(c=>{const s=caseScore(c);
-      const col=s==null?"#A1A1AA":(s>=thr?"#059669":(s>=0.4?"#D97706":"#E11D48"));
-      return `<div class="heatcell" style="background:${col}" title="case ${c.index!=null?c.index:''}: ${fm(s)}"></div>`;}).join("");
-    // each case is its own dropdown, matching the sandbox layout
-    const body = cases.length? cases.map((c,ci)=>{
+    const vd=runVerdict(agg,cases,thr);
+    const n=caseCount(agg,cases);
+
+    // one mean meter per metric, in the sandbox's proportions
+    const meters=metricNames.map(m=>{
+      const a=agg[m]||{};const s=a.mean_score;
+      const col=s==null?"var(--faint)":(s>=thr?"var(--pass)":(s>=0.4?"var(--warn)":"var(--fail)"));
+      const tcol=s==null?"var(--muted)":(s>=thr?"var(--pass-ink)":"var(--fail-ink)");
+      const pct=Math.max(2,Math.round((s||0)*100));
+      return `<div class="mtr"><span class="mname">Mean ${esc(m)}</span>
+        <span class="mval" style="color:${tcol}">${fm(s)}</span>
+        <div class="trk"><div class="fill" style="width:${pct}%;background:${col}"></div>
+          <div class="thr" style="left:${Math.round(thr*100)}%"></div></div></div>`;
+    }).join("");
+
+    const body = cases.length ? cases.map((c,ci)=>{
       const cid=`rc${ri}c${ci}`;
-      const s=caseScore(c);const pass=casePass(c);
+      const s=caseScore(c);const pass=casePass(c)!==false;
       const scoreObj=c.scores||{};
-      const expls=Object.entries(scoreObj).map(([mn,res],xi)=>{
-        const xid=`${cid}x${xi}`;
+      // one reason block per metric scored on this case
+      const why=Object.entries(scoreObj).map(([mn,res])=>{
         const mp=(typeof res.success==="boolean")?res.success:((res.score||0)>=thr);
-        return `<div class="rexpl" id="${xid}">
-          <div class="rxh" onclick="document.getElementById('${xid}').classList.toggle('open')">
-            <span class="rsc ${mp?'good':'bad'}">${fm(res.score)}</span>
-            <span class="rxname">${esc(mn)} · why</span><span class="rxc">▶</span></div>
-          <div class="rxb"><div class="rwhy ${mp?'good':'bad'}">${esc(res.reason||'(no explanation recorded)')}</div>
-            ${calcChipsDash(res.details)}</div></div>`;}).join("");
-      return `<div class="rcase open" id="${cid}">
-        <div class="rch" onclick="document.getElementById('${cid}').classList.toggle('open')">
-          <span class="rsc ${pass?'good':'bad'}">${fm(s)} ${pass?'pass':'fail'}</span>
-          <span class="rq">${esc(c.input||'not provided')}</span><span class="rxc">▶</span></div>
-        <div class="rcb">
-          <div class="rcols">
-            <div class="rcol"><div class="rl">Input</div><div class="rv2">${esc(c.input||'not provided')}</div></div>
-            <div class="rcol"><div class="rl">Retrieved context</div><div class="rv2">${esc(ctxText(c))}</div></div>
-            <div class="rcol"><div class="rl">Model output</div><div class="rv2">${esc(c.actual_output||'not provided')}</div></div>
-          </div>${expls}</div></div>`;
-    }).join("") : `<div class="rcase"><div class="rcb" style="display:block;color:var(--muted);padding:12px 15px">No per-case detail stored for this run.</div></div>`;
-    return `<div class="runcard" id="rc${ri}">
-      <div class="runhd" onclick="document.getElementById('rc${ri}').classList.toggle('open')">
-        <span class="caret">▶</span>
-        <div class="meta"><div class="rid">${esc(r.label||r.run_id||'run')}</div>
-          <div class="sub">${esc((r.timestamp||'').slice(0,16).replace('T',' '))} · ${esc(r.golden_set||'')} · ${caseCount(agg,cases)} cases · judge ${esc(r.judge_model||'n/a')}</div></div>
-        <div class="heat">${heat}</div>${verdict}
+        return `<div class="why ${mp?'pass':'fail'}">${metricNames.length>1?`<b>${esc(mn)}:</b> `:''}${esc(res.reason||'(no explanation recorded)')}</div>
+          ${calcChipsDash(res.details)}`;}).join("");
+      return `<div class="case open" id="${cid}">
+        <div class="ch" onclick="document.getElementById('${cid}').classList.toggle('open')">
+          <span class="pill ${pass?'pass':'fail'}">${fm(s)} ${pass?'pass':'fail'}</span>
+          <span class="q">${esc(c.input||'not provided')}</span><span class="caret">&#9654;</span></div>
+        <div class="cbody">
+          <div class="cols">
+            <div class="col"><div class="l">Input</div><div class="v">${esc(c.input||'not provided')}</div></div>
+            <div class="col"><div class="l">Retrieved context</div><div class="v">${esc(ctxText(c))}</div></div>
+            <div class="col"><div class="l">Model output</div><div class="v">${esc(c.actual_output||'not provided')}</div></div>
+          </div>${why}</div></div>`;
+    }).join("") : `<div class="case"><div class="cbody" style="display:block;color:var(--muted);padding:12px 15px">No per-case detail stored for this run.</div></div>`;
+
+    const url=runURL(r.run_id);
+    return `<div class="card inscard" id="rc${ri}" data-run="${esc(r.run_id||'')}">
+      <div class="chd" onclick="document.getElementById('rc${ri}').classList.toggle('open')">
+        <span class="cic">${RULER_D}</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:600;font-size:13.5px">${esc(r.label||r.run_id||'run')}</div>
+          <div style="font-size:11px;color:var(--faint);margin-top:2px">
+            ${esc((r.timestamp||'').slice(0,16).replace('T',' '))} &middot; ${esc(r.golden_set||'')} &middot; ${n} case${n===1?'':'s'} &middot; ${esc(r.judge_model||'no judge recorded')}
+            ${url?` &middot; <a class="dlink" href="${url}" onclick="event.stopPropagation()">open</a>`:''}
+          </div>
+        </div>
+        <span class="verd ${vd.bad?'fail':'pass'}">${vd.bad?'Needs review':'All pass'}</span>
       </div>
-      ${linkBar(r.run_id,"Permalink to this run")}
-      <div class="casebody"><div class="rmeters">${meters}</div>${body}</div>
+      <div class="insbody">${meters}${body}</div>
     </div>`;
   }).join("") || `<div style="color:var(--muted)">No runs yet. Run an eval to see it here.</div>`;
 }
@@ -914,18 +963,24 @@ navChat.onclick=()=>show("chat");navDash.onclick=()=>show("dash");navRuns.onclic
 })();
 
 load().then(function(){
-  // deep link: ?run=<run_id> opens the inspector on that run
-  var want=new URLSearchParams(location.search).get("run");
+  var qs=new URLSearchParams(location.search);
+  var want=qs.get("run"), view=qs.get("view");
+  // ?view=chat|dash|runs picks the pane; ?run= implies the inspector
+  if(view==="runs"||view==="dash"||view==="chat")show(view);
   if(!want)return;
   show("runs");
-  var cards=document.querySelectorAll("#runList .runcard");
-  for(var i=0;i<cards.length;i++){
-    if((cards[i].textContent||"").indexOf(want)!==-1){
-      cards[i].classList.add("open");
-      cards[i].scrollIntoView({behavior:"smooth",block:"start"});
-      break;
-    }
+  // match on the id we stamped on the card, not on its visible text:
+  // a labelled run never shows its run_id, so a text match would miss it
+  var card=document.querySelector('#runList .inscard[data-run="'+want.replace(/"/g,'')+'"]');
+  if(!card){
+    var note=document.getElementById("runSummary");
+    if(note)note.insertAdjacentHTML("afterend",
+      '<div style="color:var(--muted);font-size:12.5px;margin-bottom:10px">'+
+      'Run <code>'+want.replace(/[&<>]/g,"")+'</code> is not in the loaded history.</div>');
+    return;
   }
+  card.classList.add("open");
+  card.scrollIntoView({behavior:"smooth",block:"start"});
 });
 </script>
 </body>
