@@ -212,6 +212,87 @@
   .scorebadge.bad{background:var(--fail-soft);color:var(--fail);}
   @media(max-width:1100px){.cols{grid-template-columns:1fr 1fr;}.frame{grid-template-columns:60px 1fr 248px;}.chats{display:none;}}
   @media(max-width:780px){.frame{grid-template-columns:52px 1fr;}.side{display:none;}.chats{display:none;}.cols{grid-template-columns:1fr;}.sumrow{grid-template-columns:1fr 1fr;}.ecols{grid-template-columns:1fr;}}
+  /* chart surfaces */
+  .card canvas{height:190px !important;max-height:190px;}
+  .card{transition:box-shadow .15s,border-color .15s;}
+  .card:hover{box-shadow:0 1px 2px rgba(24,24,27,.04),0 10px 28px -14px rgba(37,99,235,.22);}
+  .kpi{position:relative;overflow:hidden;}
+  .kpi::after{content:"";position:absolute;left:0;right:0;bottom:0;height:2px;
+    background:linear-gradient(90deg,var(--blue),#7C3AED);opacity:.75;}
+  .kpi .num{font-variant-numeric:tabular-nums;letter-spacing:-0.01em;}
+  table{border-collapse:separate;border-spacing:0;}
+  tbody tr{transition:background .12s;}
+  tbody tr:hover{background:var(--soft2,#FAFAFA);}
+  th{font-weight:600;letter-spacing:.04em;text-transform:uppercase;font-size:10px;color:var(--faint);}
+  /* score rows + trend chart, matching the landing-page format */
+  .srows{display:flex;flex-direction:column;gap:7px;}
+  .srow{display:flex;align-items:center;gap:10px;}
+  .srow .nm{font-family:var(--mono);font-size:12px;flex:0 0 152px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .srow .track{flex:1;height:9px;border-radius:99px;background:var(--soft);position:relative;overflow:hidden;min-width:60px;}
+  .srow .fill{position:absolute;left:0;top:0;bottom:0;border-radius:99px;background:var(--pass);}
+  .srow .fill.bad{background:var(--fail);}
+  .srow .fill.warn{background:var(--warn);}
+  .srow .thr{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--ink);opacity:.35;}
+  .srow .v{font-family:var(--mono);font-size:12.5px;font-variant-numeric:tabular-nums;flex:0 0 34px;text-align:right;}
+  .pill{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.03em;padding:3px 8px;border-radius:6px;
+    background:var(--pass-soft);color:var(--pass-ink);flex:0 0 auto;}
+  .pill.pill-bad{background:var(--fail-soft);color:var(--fail-ink);}
+  .chartcard{border:1px solid var(--line);border-radius:12px;padding:11px 12px 8px;margin-top:11px;background:var(--card);}
+  .chartcard .h{display:flex;justify-content:space-between;align-items:center;font-family:var(--mono);
+    font-size:10.5px;color:var(--muted);margin-bottom:7px;}
+  .chartcard svg{display:block;}
+  /* deep links: always read as links */
+  a.dlink,.dlink{color:var(--blue);text-decoration:underline;text-underline-offset:2px;font-weight:500;}
+  a.dlink:hover{color:var(--blue2);}
+  .linkbar{display:flex;align-items:center;gap:7px;padding:10px 15px;border-bottom:1px solid var(--line);
+    background:var(--blue-soft);font-size:12.5px;}
+  .linkbar svg{width:13px;height:13px;flex-shrink:0;color:var(--blue);}
+  /* run inspector, sandbox card styling */
+  .runcard{border:1px solid var(--line);border-radius:14px;margin-bottom:12px;overflow:hidden;background:var(--card);}
+  .runhd{display:flex;align-items:center;gap:12px;padding:13px 15px;cursor:pointer;}
+  .runhd:hover{background:var(--soft2,#FAFAFA);}
+  .rv{font-size:11.5px;font-weight:600;padding:4px 11px;border-radius:99px;white-space:nowrap;}
+  .rv.allpass{background:var(--pass-soft);color:var(--pass-ink);}
+  .rv.somefail{background:var(--fail-soft);color:var(--fail-ink);}
+  .rmeters{padding:13px 15px;display:flex;flex-direction:column;gap:11px;border-bottom:1px solid var(--line);}
+  .rmeter .rrow{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:5px;}
+  .rmname{font-size:12px;font-weight:500;}
+  .rmval{font-family:var(--display);font-size:17px;font-variant-numeric:tabular-nums;line-height:1;}
+  .rmpr{font-family:var(--ui);font-size:11px;color:var(--faint);font-weight:400;}
+  .rtrack{position:relative;height:7px;background:var(--soft);border-radius:99px;overflow:hidden;}
+  .rfill{position:absolute;left:0;top:0;bottom:0;border-radius:99px;}
+  .rthr{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--faint);}
+  .rcase{border-bottom:1px solid var(--line);}
+  .rcase:last-child{border-bottom:0;}
+  .rch{display:flex;align-items:center;gap:10px;padding:12px 15px;cursor:pointer;}
+  .rch:hover{background:var(--soft2,#FAFAFA);}
+  .rq{font-size:13px;font-weight:500;flex:1;min-width:0;}
+  .rxc{color:var(--faint);font-size:11px;transition:transform .15s;flex-shrink:0;}
+  .rcase.open > .rch .rxc,.rexpl.open .rxh .rxc{transform:rotate(90deg);}
+  .rcb{display:none;padding:0 15px 14px;}
+  .rcase.open .rcb{display:block;}
+  .rcols{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px;margin-bottom:10px;}
+  .rcol{background:var(--soft2,#FAFAFA);border:1px solid var(--line);border-radius:10px;padding:10px 11px;min-width:0;}
+  .rl{font-size:10px;letter-spacing:.04em;text-transform:uppercase;color:var(--faint);margin-bottom:6px;}
+  .rv2{font-size:12.5px;line-height:1.5;overflow-wrap:anywhere;}
+  .rexpl{border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-top:8px;}
+  .rxh{display:flex;align-items:center;gap:8px;padding:9px 11px;cursor:pointer;}
+  .rxh:hover{background:var(--soft2,#FAFAFA);}
+  .rxname{font-size:11.5px;font-weight:500;flex:1;}
+  .rxb{display:none;padding:0 11px 11px;}
+  .rexpl.open .rxb{display:block;}
+  .rwhy{font-size:12.5px;line-height:1.55;padding:8px 10px;border-radius:8px;}
+  .rwhy.bad{background:var(--fail-soft);color:var(--fail-ink);}
+  .rwhy.good{background:var(--pass-soft);color:var(--pass-ink);}
+  .rcalc{margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;}
+  .rchip{font-family:var(--mono);font-size:10.5px;padding:3px 8px;border-radius:6px;background:var(--soft);color:var(--muted);}
+  .rchip b{color:var(--ink);font-weight:700;}
+  .rchip.bad{background:var(--fail-soft);color:var(--fail-ink);}
+  .rsc{font-family:var(--mono);font-size:11.5px;font-weight:700;padding:3px 9px;border-radius:7px;flex-shrink:0;}
+  .rsc.good{background:var(--pass-soft);color:var(--pass-ink);}
+  .rsc.bad{background:var(--fail-soft);color:var(--fail-ink);}
+  .heatcell{width:13px;height:13px;border-radius:3px;}
+  @media(max-width:1100px){.rcols{grid-template-columns:1fr;}}
 </style>
 </head>
 <body>
@@ -297,6 +378,7 @@ async function load(){
   document.getElementById("state").textContent=live?"live · Supabase":"sample data";
   if(!live)document.getElementById("dot").style.background="#B08A4A";
   runs=runs.slice().sort((a,b)=>a.timestamp<b.timestamp?-1:1);
+  window.ALL_RUNS=runs;
   renderDash(runs);renderRuns(runs);
   if(window.renderChatSide)window.renderChatSide(); // side panel is per-chat
 }
@@ -307,6 +389,96 @@ function firstMetric(c){const sc=c&&c.scores?c.scores:{};const k=Object.keys(sc)
 function caseScore(c){const m=firstMetric(c);return m&&typeof m.score==="number"?m.score:(typeof c.min_score==="number"?c.min_score:null);}
 function casePass(c){const m=firstMetric(c);if(m&&typeof m.success==="boolean")return m.success;const s=caseScore(c);return s==null?null:s>=0.7;}
 function ctxText(c){const rc=c.retrieval_context||c.context;if(Array.isArray(rc))return rc.join(" • ");return rc||"—";}
+
+// ---- shared: score rows, trend chart, deep links ----
+function scoreColor(s,thr){return s==null?"var(--faint)":(s>=thr?"var(--pass)":(s>=0.4?"var(--warn)":"var(--fail)"));}
+function scoreCls(s,thr){return s==null?"":(s>=thr?"":(s>=0.4?"warn":"bad"));}
+
+// one compact row per metric: name, bar, score, verdict pill
+function scoreRows(agg,thr){
+  const names=Object.keys(agg||{});
+  if(!names.length)return '<div style="color:var(--muted);font-size:12px">no metric aggregate</div>';
+  return '<div class="srows">'+names.map(m=>{
+    const a=agg[m]||{};const sc=a.mean_score;
+    const pass=sc!=null&&sc>=thr;
+    const pct=Math.max(2,Math.round((sc||0)*100));
+    return `<div class="srow">
+      <span class="nm" title="${esc(m)}">${esc(m)}</span>
+      <span class="track"><span class="fill ${scoreCls(sc,thr)}" style="width:${pct}%"></span>
+        <span class="thr" style="left:${Math.round(thr*100)}%"></span></span>
+      <span class="v">${sc==null?"—":Number(sc).toFixed(2).replace(/^0/,"")}</span>
+      <span class="pill ${pass?'':'pill-bad'}">${pass?'PASS':'FAIL'}</span>
+    </div>`;}).join("")+'</div>';
+}
+
+// single source of truth for a run's verdict, so every badge agrees
+function runVerdict(agg,cases,thr){
+  const names=Object.keys(agg||{});
+  const failingMetrics=names.filter(m=>{const sc=(agg[m]||{}).mean_score;return sc==null||sc<thr;});
+  // a metric can average above threshold while individual cases still fail
+  const failingCases=(cases||[]).filter(c=>casePass(c)===false).length;
+  if(failingMetrics.length)return {cls:"pill-bad",text:`${failingMetrics.length} FAILING`,bad:true};
+  if(failingCases)return {cls:"pill-bad",text:`${failingCases} CASE${failingCases===1?'':'S'} FAIL`,bad:true};
+  return {cls:"",text:"ALL PASS",bad:false};
+}
+
+// case count: per-case detail when we have it, otherwise the aggregate's n
+function caseCount(agg,cases){
+  if(cases&&cases.length)return cases.length;
+  const first=Object.values(agg||{})[0];
+  return (first&&first.n)||0;
+}
+
+// "Ran N metrics on M cases · K failing" header line
+function ranLine(agg,cases,thr){
+  const names=Object.keys(agg||{});
+  const v=runVerdict(agg,cases,thr);
+  const n=caseCount(agg,cases);
+  return `<div style="font-size:12.5px;color:var(--muted);margin-bottom:10px">
+    Ran ${names.length} metric${names.length===1?'':'s'} on ${n} case${n===1?'':'s'} &nbsp;<span class="pill ${v.cls}">${v.text}</span></div>`;
+}
+
+// real trend chart over saved runs, drawn in the landing-page style
+function trendSVG(runs,metric,thr,label){
+  const pts=(runs||[]).map(r=>{const a=(r.aggregate||{})[metric];return a?a.mean_score:null;})
+                      .filter(v=>typeof v==="number");
+  if(pts.length<2)return "";
+  const W=330,H=128,L=34,R=318,T=12,B=116;
+  const x=i=>pts.length===1?L:L+(R-L)*(i/(pts.length-1));
+  const y=v=>B-(B-T)*Math.max(0,Math.min(1,v));
+  const line=pts.map((v,i)=>`${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+  const band=pts.map((v,i)=>`${x(i).toFixed(1)},${y(Math.min(1,v+0.05)).toFixed(1)}`).join(" ")+" "+
+             pts.slice().reverse().map((v,i)=>{const j=pts.length-1-i;
+               return `${x(j).toFixed(1)},${y(Math.max(0,v-0.05)).toFixed(1)}`;}).join(" ");
+  const dots=pts.map((v,i)=>`<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="3.2" fill="${v>=thr?'#059669':'#E11D48'}"><title>${Number(v).toFixed(2)}</title></circle>`).join("");
+  return `<div class="chartcard">
+    <div class="h"><span>plot_metric_trend · ${esc(metric)}</span><span>last ${pts.length} run${pts.length===1?'':'s'}</span></div>
+    <svg viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" font-family="JetBrains Mono, monospace" font-size="8">
+      <line x1="${L}" y1="${B}" x2="${R}" y2="${B}" stroke="#E4E4E7"/>
+      <line x1="${L}" y1="${T}" x2="${L}" y2="${B}" stroke="#E4E4E7"/>
+      <text x="6" y="15" fill="#A1A1AA">1.0</text>
+      <text x="6" y="${((T+B)/2+3).toFixed(0)}" fill="#A1A1AA">0.5</text>
+      <text x="6" y="119" fill="#A1A1AA">0.0</text>
+      <polygon points="${band}" fill="#EFF1F4"/>
+      <line x1="${L}" y1="${y(thr).toFixed(1)}" x2="${R}" y2="${y(thr).toFixed(1)}" stroke="#A1A1AA" stroke-width="1" stroke-dasharray="4 3"/>
+      <text x="290" y="${(y(thr)-4).toFixed(1)}" fill="#A1A1AA">${thr.toFixed(2)}</text>
+      <polyline points="${line}" fill="none" stroke="#2563EB" stroke-width="2" stroke-linejoin="round"/>
+      ${dots}
+    </svg>
+  </div>`;
+}
+
+// permalink to a run, rendered so it reads as a link
+function runURL(runId){
+  if(!runId)return "";
+  const key=new URLSearchParams(location.search).get("key");
+  return `${location.origin}/dashboard?run=${encodeURIComponent(runId)}`+(key?`&key=${encodeURIComponent(key)}`:"");
+}
+const LINKICON='<svg viewBox="0 0 24 24" fill="none"><path d="M10 13a5 5 0 007.5.5l3-3a5 5 0 00-7-7l-1.5 1.5M14 11a5 5 0 00-7.5-.5l-3 3a5 5 0 007 7L12 19" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
+function linkBar(runId,text){
+  const u=runURL(runId);if(!u)return "";
+  return `<div class="linkbar">${LINKICON}<a class="dlink" href="${u}">${esc(text||"View this run in the dashboard")}</a></div>`;
+}
 
 function renderRuns(runs){
   const recent=runs.slice().reverse();
@@ -324,34 +496,69 @@ function renderRuns(runs){
   document.getElementById("runList").innerHTML = recent.map((r,ri)=>{
     const cases=r.per_case||[];
     const agg=r.aggregate||{};
+    const thr=r.threshold||0.7;
     const metricNames=Object.keys(agg);
-    const aggChips=metricNames.map(m=>{const s=agg[m]&&agg[m].mean_score;const ok=(s!=null)&&s>=(r.threshold||0.7);return `<span class="scorebadge ${ok?'good':'bad'}" title="${esc(m)}">${esc(m.slice(0,4))} ${fm(s)}</span>`;}).join(" ");
-    const heat=cases.map(c=>{const s=caseScore(c);const col=s==null?"#9CA3AF":(s>=0.7?"#15924F":(s>=0.4?"#D9A441":"#D5453B"));return `<div class="heatcell" style="background:${col}" title="case ${c.index!=null?c.index:''}: ${fm(s)}"></div>`;}).join("");
-    const body = cases.length? cases.map(c=>{
-      const m=firstMetric(c);const s=caseScore(c);const pass=casePass(c);
-      const reason=(m&&m.reason)?m.reason:"(no judge reason recorded)";
-      return `<div class="case">
-        <div class="chd"><span class="cidx">#${c.index!=null?c.index:''}</span><span class="cq">${esc(c.input||'—')}</span>
-          <span class="scorebadge ${pass?'good':'bad'}">${fm(s)} ${pass?'PASS':'FAIL'}</span></div>
-        <div class="cols">
-          <div class="col"><div class="lab">Input</div><div class="val">${esc(c.input||'—')}</div></div>
-          <div class="col"><div class="lab">Context</div><div class="val">${esc(ctxText(c))}</div></div>
-          <div class="col"><div class="lab">Expected</div><div class="val">${esc(c.expected_output||'—')}</div></div>
-          <div class="col"><div class="lab">Actual</div><div class="val">${esc(c.actual_output||'—')}</div></div>
-          <div class="col reason ${pass?'good':'bad'}"><div class="lab">${esc((m&&m.name)||'score')} · why</div><div class="val">${esc(reason)}</div></div>
-        </div></div>`;
-    }).join("") : `<div class="case"><div class="val" style="color:var(--muted)">No per-case detail stored for this run.</div></div>`;
+    const rvd=runVerdict(agg,cases,thr);
+    const verdict=rvd.bad?'<span class="rv somefail">Needs review</span>'
+                         :'<span class="rv allpass">All pass</span>';
+    // score rows in the landing-page format, plus a real trend chart for this metric
+    const meters=ranLine(agg,cases,thr)+scoreRows(agg,thr)
+      +trendSVG(runs,metricNames[0]||"faithfulness",thr);
+    const heat=cases.map(c=>{const s=caseScore(c);
+      const col=s==null?"#A1A1AA":(s>=thr?"#059669":(s>=0.4?"#D97706":"#E11D48"));
+      return `<div class="heatcell" style="background:${col}" title="case ${c.index!=null?c.index:''}: ${fm(s)}"></div>`;}).join("");
+    // each case is its own dropdown, matching the sandbox layout
+    const body = cases.length? cases.map((c,ci)=>{
+      const cid=`rc${ri}c${ci}`;
+      const s=caseScore(c);const pass=casePass(c);
+      const scoreObj=c.scores||{};
+      const expls=Object.entries(scoreObj).map(([mn,res],xi)=>{
+        const xid=`${cid}x${xi}`;
+        const mp=(typeof res.success==="boolean")?res.success:((res.score||0)>=thr);
+        return `<div class="rexpl" id="${xid}">
+          <div class="rxh" onclick="document.getElementById('${xid}').classList.toggle('open')">
+            <span class="rsc ${mp?'good':'bad'}">${fm(res.score)}</span>
+            <span class="rxname">${esc(mn)} · why</span><span class="rxc">▶</span></div>
+          <div class="rxb"><div class="rwhy ${mp?'good':'bad'}">${esc(res.reason||'(no explanation recorded)')}</div>
+            ${calcChipsDash(res.details)}</div></div>`;}).join("");
+      return `<div class="rcase open" id="${cid}">
+        <div class="rch" onclick="document.getElementById('${cid}').classList.toggle('open')">
+          <span class="rsc ${pass?'good':'bad'}">${fm(s)} ${pass?'pass':'fail'}</span>
+          <span class="rq">${esc(c.input||'not provided')}</span><span class="rxc">▶</span></div>
+        <div class="rcb">
+          <div class="rcols">
+            <div class="rcol"><div class="rl">Input</div><div class="rv2">${esc(c.input||'not provided')}</div></div>
+            <div class="rcol"><div class="rl">Retrieved context</div><div class="rv2">${esc(ctxText(c))}</div></div>
+            <div class="rcol"><div class="rl">Model output</div><div class="rv2">${esc(c.actual_output||'not provided')}</div></div>
+          </div>${expls}</div></div>`;
+    }).join("") : `<div class="rcase"><div class="rcb" style="display:block;color:var(--muted);padding:12px 15px">No per-case detail stored for this run.</div></div>`;
     return `<div class="runcard" id="rc${ri}">
       <div class="runhd" onclick="document.getElementById('rc${ri}').classList.toggle('open')">
         <span class="caret">▶</span>
         <div class="meta"><div class="rid">${esc(r.label||r.run_id||'run')}</div>
-          <div class="sub">${esc((r.timestamp||'').slice(0,16).replace('T',' '))} · ${esc(r.golden_set||'')} · ${cases.length} cases · judge ${esc(r.judge_model||'—')}</div></div>
-        <div class="heat">${heat}</div>
-        <div class="agg">${aggChips}</div>
+          <div class="sub">${esc((r.timestamp||'').slice(0,16).replace('T',' '))} · ${esc(r.golden_set||'')} · ${caseCount(agg,cases)} cases · judge ${esc(r.judge_model||'n/a')}</div></div>
+        <div class="heat">${heat}</div>${verdict}
       </div>
-      <div class="casebody">${body}</div>
+      ${linkBar(r.run_id,"Permalink to this run")}
+      <div class="casebody"><div class="rmeters">${meters}</div>${body}</div>
     </div>`;
   }).join("") || `<div style="color:var(--muted)">No runs yet. Run an eval to see it here.</div>`;
+}
+
+// calculation chips from a metric's details object
+function calcChipsDash(details){
+  if(!details||typeof details!=="object")return "";
+  const chips=[];
+  for(const [k,v] of Object.entries(details)){
+    if(Array.isArray(v)){
+      if(!v.length)continue;
+      chips.push(`<span class="rchip bad"><b>${v.length}</b> ${esc(k.replace(/_/g," "))}</span>`);
+      v.slice(0,8).forEach(it=>chips.push(`<span class="rchip bad">${esc(String(it)).slice(0,110)}</span>`));
+    } else if(typeof v==="number"){
+      chips.push(`<span class="rchip">${esc(k.replace(/_/g," "))} <b>${v}</b></span>`);
+    }
+  }
+  return chips.length?`<div class="rcalc">${chips.join("")}</div>`:"";
 }
 
 
@@ -367,15 +574,78 @@ function renderDash(runs){
     `<div class="kpi"><div class="lab">Avg faith.</div><div class="num">${fm(avgF)}</div></div>`;
   const judges=[...new Set(runs.map(r=>r.judge_model||"judge"))];
   const labels=runs.map(r=>r.label||(r.run_id||"").slice(0,8));
+
+  // shared chart styling
+  const FONT={family:"Inter, system-ui, sans-serif",size:11};
+  const MONOF={family:"'JetBrains Mono', monospace",size:10};
+  const gridY={color:"rgba(228,228,231,.9)",drawTicks:false};
+  const tip={
+    backgroundColor:"#18181B",titleFont:{...FONT,weight:"600",size:12},
+    bodyFont:MONOF,padding:10,cornerRadius:9,displayColors:true,
+    boxWidth:8,boxHeight:8,boxPadding:4,borderColor:"rgba(255,255,255,.08)",borderWidth:1
+  };
+  // dashed threshold line, drawn under the data
+  const thresholdLine={
+    id:"thr",
+    beforeDatasetsDraw(c){
+      const y=c.scales.y; if(!y)return;
+      const py=y.getPixelForValue(0.7);
+      const {left,right}=c.chartArea;
+      const x=c.ctx;
+      x.save();x.strokeStyle="#A1A1AA";x.lineWidth=1;x.setLineDash([4,4]);
+      x.beginPath();x.moveTo(left,py);x.lineTo(right,py);x.stroke();
+      x.setLineDash([]);x.fillStyle="#A1A1AA";x.font="10px 'JetBrains Mono', monospace";
+      x.textAlign="right";x.fillText("0.70",right-2,py-5);x.restore();
+    }
+  };
+  function fade(ctx,hex){
+    const g=ctx.createLinearGradient(0,0,0,190);
+    g.addColorStop(0,hex+"38");g.addColorStop(1,hex+"00");return g;
+  }
+
   if(trendChart)trendChart.destroy();
-  trendChart=new Chart(document.getElementById("trend"),{type:"line",
-    data:{labels,datasets:judges.map((j,i)=>({label:j,borderColor:COLORS[i%COLORS.length],backgroundColor:COLORS[i%COLORS.length],tension:.3,spanGaps:true,data:runs.map(r=>(r.judge_model||"judge")===j?faith(r):null)}))},
-    options:{plugins:{legend:{labels:{font:{size:10}}}},scales:{y:{min:0,max:1,ticks:{font:{size:10}}},x:{ticks:{font:{size:10}}}},elements:{point:{radius:3}}}});
+  const tctx=document.getElementById("trend").getContext("2d");
+  trendChart=new Chart(tctx,{type:"line",
+    data:{labels,datasets:judges.map((j,i)=>{
+      const col=COLORS[i%COLORS.length];
+      return {label:j,borderColor:col,backgroundColor:fade(tctx,col),
+        borderWidth:2.5,tension:.38,spanGaps:true,fill:judges.length===1,
+        pointRadius:0,pointHoverRadius:5,pointHoverBackgroundColor:col,
+        pointHoverBorderColor:"#fff",pointHoverBorderWidth:2,
+        data:runs.map(r=>(r.judge_model||"judge")===j?faith(r):null)};
+    })},
+    plugins:[thresholdLine],
+    options:{responsive:true,maintainAspectRatio:false,
+      interaction:{mode:"index",intersect:false},
+      plugins:{legend:{display:judges.length>1,position:"bottom",
+        labels:{font:FONT,color:"#71717A",usePointStyle:true,pointStyle:"circle",boxWidth:7,padding:14}},
+        tooltip:tip},
+      scales:{
+        y:{min:0,max:1,border:{display:false},grid:gridY,
+           ticks:{font:MONOF,color:"#A1A1AA",padding:8,stepSize:.25}},
+        x:{border:{display:false},grid:{display:false},
+           ticks:{font:MONOF,color:"#A1A1AA",padding:6,maxRotation:0,autoSkipPadding:14}}
+      }}});
+
   const gens=Object.keys(byGen);
   if(modelChart)modelChart.destroy();
-  modelChart=new Chart(document.getElementById("models"),{type:"bar",
-    data:{labels:gens,datasets:[{label:"avg faithfulness",data:gens.map(g=>mean(byGen[g].filter(Boolean))),backgroundColor:gens.map((g,i)=>COLORS[i%COLORS.length])}]},
-    options:{plugins:{legend:{display:false}},scales:{y:{min:0,max:1,ticks:{font:{size:10}}},x:{ticks:{font:{size:10}}}}}});
+  const mctx=document.getElementById("models").getContext("2d");
+  const mvals=gens.map(g=>mean(byGen[g].filter(Boolean)));
+  modelChart=new Chart(mctx,{type:"bar",
+    data:{labels:gens,datasets:[{label:"avg faithfulness",data:mvals,
+      backgroundColor:mvals.map(v=>v>=0.7?"#059669":(v>=0.4?"#D97706":"#E11D48")),
+      hoverBackgroundColor:mvals.map(v=>v>=0.7?"#047857":(v>=0.4?"#B45309":"#BE123C")),
+      borderRadius:7,borderSkipped:false,barPercentage:.62,categoryPercentage:.72}]},
+    plugins:[thresholdLine],
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:tip},
+      scales:{
+        y:{min:0,max:1,border:{display:false},grid:gridY,
+           ticks:{font:MONOF,color:"#A1A1AA",padding:8,stepSize:.25}},
+        x:{border:{display:false},grid:{display:false},
+           ticks:{font:FONT,color:"#71717A",padding:6,maxRotation:0}}
+      }}});
+
   const lb=gens.map(g=>{const rs=runs.filter(r=>(r.generator_model||"unknown")===g);return{g,f:mean(rs.map(faith).filter(Boolean)),pr:mean(rs.map(r=>r.aggregate&&r.aggregate.faithfulness&&r.aggregate.faithfulness.pass_rate).filter(v=>v!=null)),n:rs.length};}).sort((a,b)=>b.f-a.f);
   document.getElementById("leaderboard").innerHTML=`<table><thead><tr><th>Model</th><th>Faith.</th><th>Pass</th><th>Runs</th></tr></thead><tbody>`+
     lb.map((m,i)=>`<tr><td class="mono"><span class="sw" style="background:${COLORS[i%COLORS.length]}"></span>${m.g}</td><td class="mono" style="font-weight:700">${fm(m.f)}</td><td><span class="chip ${m.pr>=0.7?'pass':'fail'}">${Math.round(m.pr*100)}%</span></td><td class="mono">${m.n}</td></tr>`).join("")+`</tbody></table>`;
@@ -469,18 +739,12 @@ navChat.onclick=()=>show("chat");navDash.onclick=()=>show("dash");navRuns.onclic
     const cases=obj.per_case||[];const agg=obj.aggregate||{};
     const metricNames=Object.keys(agg);
     const thr=obj.threshold||PASS_T;
-    const anyFail=metricNames.some(m=>agg[m]&&agg[m].pass_rate!=null&&agg[m].pass_rate<1)||cases.some(c=>!casePass(c));
-    const verdict=anyFail?'<span class="everdict somefail">Needs review</span>':'<span class="everdict allpass">All pass</span>';
+    const evd=runVerdict(agg,cases,thr);
+    const verdict=evd.bad?'<span class="everdict somefail">Needs review</span>':'<span class="everdict allpass">All pass</span>';
     const headMetric=metricNames[0]||"eval";
-    // metric meters (every metric in this run)
-    const meters=metricNames.map(m=>{
-      const a=agg[m]||{};const s=a.mean_score;const col=metricColor(s);const pct=Math.max(2,Math.round((s||0)*100));
-      const tcol=s==null?"var(--muted)":(s>=thr?"var(--pass-ink)":"var(--fail-ink)");
-      return `<div class="emeter">
-        <div class="erow"><span class="emname">${esc(m)}</span><span class="emval" style="color:${tcol}">${fm(s)}</span></div>
-        <div class="emtrack"><div class="emfill" style="width:${pct}%;background:${col}"></div><div class="emthresh" style="left:${Math.round(thr*100)}%"></div></div>
-      </div>`;
-    }).join("");
+    // score rows in the landing-page format, plus a trend chart across saved runs
+    const meters=ranLine(agg,cases,thr)+scoreRows(agg,thr)
+      +trendSVG(window.ALL_RUNS||[],metricNames[0]||"faithfulness",thr);
     // cases (collapsible dropdowns)
     const body=cases.map((c,ci)=>{
       const cid="ec"+(cardSeq)+"_"+ci;
@@ -523,7 +787,8 @@ navChat.onclick=()=>show("chat");navDash.onclick=()=>show("dash");navRuns.onclic
         <div class="etitle"><div class="ename">${esc(obj.golden_set||headMetric)}</div><div class="esub">threshold ${fm(thr)} · ${cases.length} case${cases.length===1?'':'s'}</div></div>
         ${verdict}
       </div>
-      <div class="emeters">${meters||'<div class="esub">no metric aggregate</div>'}</div>
+      ${obj.run_id?linkBar(obj.run_id,"Open this run in the dashboard"):""}
+      <div class="emeters">${meters}</div>
       ${body}
     </div>`;
   }
