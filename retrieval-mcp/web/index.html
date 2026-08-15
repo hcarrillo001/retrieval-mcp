@@ -105,6 +105,9 @@
   .msg{max-width:90%;padding:10px 12px;border-radius:12px;font-size:13.5px;}
   .msg.user{align-self:flex-end;background:var(--ink);color:#fff;border-bottom-right-radius:4px;}
   .msg.bot{align-self:flex-start;background:var(--soft);border-bottom-left-radius:4px;width:100%;}
+  .linkline{display:flex;align-items:center;gap:7px;margin-top:11px;padding-top:10px;border-top:1px solid var(--line);font-size:12.5px;}
+  .linkline svg{width:13px;height:13px;color:#2563EB;flex-shrink:0;}
+  .linkline a{color:#2563EB;text-decoration:underline;text-underline-offset:2px;font-weight:500;}
   .scorerow{display:flex;align-items:center;gap:10px;margin:7px 0;}
   .scorerow .nm{font-family:var(--mono);font-size:12px;width:128px;}
   .track{flex:1;height:9px;border-radius:999px;background:#E4E4E7;overflow:hidden;}
@@ -370,7 +373,7 @@
 
 <section id="manual"><div class="wrap">
   <h2>Or just run evals by chatting</h2>
-  <p class="lead">No pipeline required. Connect retriEVAL in Claude or another chat UI, toggle it on, and a manual tester can score outputs, author metrics, and pull up charts in plain language.</p>
+  <p class="lead">No pipeline required. Connect retriEVAL in Claude or another chat UI, toggle it on, and a manual tester can score outputs and author metrics in plain language. Every result links straight to the run in the dashboard.</p>
   <div class="twocol">
     <div>
       <div class="colh">Toggle it on, like any connector</div>
@@ -396,25 +399,9 @@
               <div class="scorerow"><span class="nm">faithfulness</span><span class="track"><span class="fill" style="width:92%"></span></span><span class="v">.92</span><span class="pill">PASS</span></div>
               <div class="scorerow"><span class="nm">answer_relevancy</span><span class="track"><span class="fill" style="width:88%"></span></span><span class="v">.88</span><span class="pill">PASS</span></div>
               <div class="scorerow"><span class="nm">contextual_recall</span><span class="track"><span class="fill bad" style="width:58%"></span></span><span class="v">.58</span><span class="pill pill-bad">FAIL</span></div>
-              <div class="chartcard">
-                <div class="h"><span>plot_metric_trend · faithfulness</span><span>last 6 runs</span></div>
-                <svg viewBox="0 0 330 128" width="100%" preserveAspectRatio="xMidYMid meet" font-family="JetBrains Mono, monospace" font-size="8">
-                  <line x1="34" y1="116" x2="318" y2="116" stroke="#EAEAEC"/>
-                  <line x1="34" y1="12" x2="34" y2="116" stroke="#EAEAEC"/>
-                  <text x="6" y="15" fill="#8A8F98">1.0</text>
-                  <text x="6" y="67" fill="#8A8F98">0.5</text>
-                  <text x="6" y="119" fill="#8A8F98">0.0</text>
-                  <polygon points="34,43.2 90,34.9 145,39.0 201,26.6 256,22.4 312,15.1 312,27.6 256,35.9 201,43.2 145,55.7 90,51.5 34,58.8" fill="#E7E7EA"/>
-                  <line x1="34" y1="43.2" x2="318" y2="43.2" stroke="#8A8F98" stroke-width="1" stroke-dasharray="4 3"/>
-                  <text x="296" y="40" fill="#8A8F98">0.70</text>
-                  <polyline points="34,51.5 90,43.2 145,47.4 201,34.9 256,28.6 312,20.3" fill="none" stroke="#2563EB" stroke-width="2" stroke-linejoin="round"/>
-                  <circle cx="34" cy="51.5" r="3.2" fill="#D5453B"/>
-                  <circle cx="90" cy="43.2" r="3.2" fill="#15924F"/>
-                  <circle cx="145" cy="47.4" r="3.2" fill="#D5453B"/>
-                  <circle cx="201" cy="34.9" r="3.2" fill="#15924F"/>
-                  <circle cx="256" cy="28.6" r="3.2" fill="#15924F"/>
-                  <circle cx="312" cy="20.3" r="3.2" fill="#15924F"/>
-                </svg>
+              <div class="linkline">
+                <svg viewBox="0 0 24 24" fill="none"><path d="M10 13a5 5 0 007.5.5l3-3a5 5 0 00-7-7l-1.5 1.5M14 11a5 5 0 00-7.5-.5l-3 3a5 5 0 007 7L12 19" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                <a href="/dashboard">View this run in the dashboard</a>
               </div>
             </div>
           </div>
@@ -428,36 +415,29 @@
 
 <section id="quickstart"><div class="wrap">
   <h2>Quickstart</h2>
-  <p class="lead">Run it locally over stdio, or connect the hosted server from anywhere.</p>
+  <p class="lead">Connect the hosted server to any MCP client &mdash; nothing to install.</p>
   <div class="twocol">
     <div>
-      <div class="colh">Local (Claude Desktop)</div>
-      <pre><button class="copy" data-c="pip install retrieval-mcp&#10;export ANTHROPIC_API_KEY=sk-ant-...">copy</button><span class="c"># install</span>
-pip install retrieval-mcp
-export ANTHROPIC_API_KEY=sk-ant-...
+      <div class="colh">Connect (Claude.ai, Claude Desktop, any MCP client)</div>
+      <pre><button class="copy" data-c="https://retrieval-mcp-production.up.railway.app/mcp?key=YOUR_TOKEN">copy</button><span class="c"># Settings &rarr; Connectors &rarr; Add custom connector</span>
+URL: https://retrieval-mcp-production.up.railway.app/mcp
+     ?key=YOUR_TOKEN
 
-<span class="c"># add to claude_desktop_config.json</span>
-{
-  "mcpServers": {
-    "retrieval": {
-      "command": "retrieval-mcp"
-    }
-  }
-}</pre>
+<span class="c"># the token goes in the URL, not a header &mdash;</span>
+<span class="c"># chat clients don't offer request-header auth</span></pre>
     </div>
     <div>
-      <div class="colh">Hosted (any client, incl. Claude.ai)</div>
-      <pre><button class="copy" data-c='Connect a custom connector to https://YOUR-APP.up.railway.app/mcp'>copy</button><span class="c"># Claude.ai → Settings → Connectors</span>
-Add custom connector:
-  URL: https://YOUR-APP.up.railway.app/mcp
-  Auth: Bearer &lt;token&gt;
+      <div class="colh">Then just ask</div>
+      <pre><button class="copy" data-c="Score this answer against my docs with faithfulness, then give me the dashboard link.">copy</button><span class="c"># in the chat</span>
+"Score this answer against my docs
+ with faithfulness."
 
-<span class="c"># then just ask Claude</span>
-"Load my golden set and run
- faithfulness + answer_relevancy."</pre>
+<span class="c"># every result comes back with a link</span>
+"View this result in the dashboard"
+ &rarr; retrieval-mcp.com/dashboard?run=...</pre>
     </div>
   </div>
-  <p class="lead" style="margin-top:18px">Pick your judge: free local <code>Ollama</code> (<code>RETRIEVAL_JUDGE_BACKEND=ollama</code>), your <code>Anthropic</code> key, your <code>OpenAI</code> key, or any OpenAI-compatible endpoint via <code>OPENAI_BASE_URL</code>. Full deploy guide (Supabase + Railway + Vercel) is in the repo's <code>DEPLOY.md</code>.</p>
+  <p class="lead" style="margin-top:18px">Pick your judge: free local <code>Ollama</code> (<code>RETRIEVAL_JUDGE_BACKEND=ollama</code>), your <code>Anthropic</code> key, your <code>OpenAI</code> key, or any OpenAI-compatible endpoint via <code>OPENAI_BASE_URL</code>. Self-hosting guide (Supabase + Railway + Vercel) coming with the public repo.</p>
 </div></section>
 
 <section id="demos"><div class="wrap">
