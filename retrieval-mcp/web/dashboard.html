@@ -21,7 +21,7 @@
   html,body{height:100%;}
   body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--ui);font-size:14px;line-height:1.5;}
   .app{height:100vh;padding:14px;}
-  .frame{height:100%;display:grid;grid-template-columns:60px 240px 1fr 248px;background:var(--line);gap:1px;border:0.5px solid var(--line);border-radius:14px;overflow:hidden;}
+  .frame{height:100%;display:grid;grid-template-columns:60px 240px 1fr;background:var(--line);gap:1px;border:0.5px solid var(--line);border-radius:14px;overflow:hidden;}
 
   /* chat sessions sidebar */
   .chats{background:var(--card);display:flex;flex-direction:column;min-height:0;overflow:hidden;}
@@ -210,8 +210,8 @@
   .scorebadge{font-family:var(--mono);font-size:13px;font-weight:700;padding:3px 9px;border-radius:7px;}
   .scorebadge.good{background:var(--pass-soft);color:var(--pass);}
   .scorebadge.bad{background:var(--fail-soft);color:var(--fail);}
-  @media(max-width:1100px){.cols{grid-template-columns:1fr 1fr;}.frame{grid-template-columns:60px 1fr 248px;}.chats{display:none;}}
-  @media(max-width:780px){.frame{grid-template-columns:52px 1fr;}.side{display:none;}.chats{display:none;}.cols{grid-template-columns:1fr;}.sumrow{grid-template-columns:1fr 1fr;}.ecols{grid-template-columns:1fr;}}
+  @media(max-width:1100px){.cols{grid-template-columns:1fr 1fr;}.frame{grid-template-columns:60px 1fr;}.chats{display:none;}}
+  @media(max-width:780px){.frame{grid-template-columns:52px 1fr;}.chats{display:none;}.cols{grid-template-columns:1fr;}.sumrow{grid-template-columns:1fr 1fr;}.ecols{grid-template-columns:1fr;}}
   /* chart surfaces */
   .card canvas{height:190px !important;max-height:190px;}
   .card{transition:box-shadow .15s,border-color .15s;}
@@ -352,7 +352,6 @@
   <div class="rail">
     <div class="logo"><svg viewBox="0 0 32 32" fill="none"><circle cx="13.5" cy="13.5" r="9" stroke="currentColor" stroke-width="2.6"/><path d="M20.5 20.5L27 27" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/><path d="M9.5 13.8l2.8 2.8 5-5.4" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
     <button class="nav active" id="navChat" title="Chat"><svg viewBox="0 0 24 24" fill="none"><path d="M4 5h16v11H8l-4 3z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></button>
-    <button class="nav" id="navDash" title="Dashboard"><svg viewBox="0 0 24 24" fill="none"><path d="M4 13h6v7H4zM14 4h6v16h-6zM4 4h6v5H4z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></button>
     <button class="nav" id="navRuns" title="Runs"><svg viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="8" cy="6" r="1.6" fill="currentColor"/><circle cx="14" cy="12" r="1.6" fill="currentColor"/><circle cx="10" cy="18" r="1.6" fill="currentColor"/></svg></button>
   </div>
 
@@ -393,17 +392,6 @@
 
     <div class="view runs hide" id="viewRuns">
       <div id="runList"></div>
-    </div>
-  </div>
-
-  <div class="side">
-    <div class="collap" id="collapLatest">
-      <div class="ch" onclick="document.getElementById('collapLatest').classList.toggle('closed')"><span class="cv">▼</span> This chat</div>
-      <div class="cc">
-        <div class="stat"><div class="l">Evals this chat</div><div class="n" id="sRuns" style="font-size:26px">—</div></div>
-        <span class="h" style="margin-top:8px">Metrics measured</span>
-        <div id="sMetrics"></div>
-      </div>
     </div>
   </div>
 
@@ -750,7 +738,7 @@ function renderDash(runs){
 }
 
 /* nav switching */
-const navChat=document.getElementById("navChat"),navDash=document.getElementById("navDash"),navRuns=document.getElementById("navRuns");
+const navChat=document.getElementById("navChat"),navRuns=document.getElementById("navRuns");
 function show(view){
   const isChat=view==="chat",isDash=view==="dash",isRuns=view==="runs";
   document.getElementById("viewChat").classList.toggle("hide",!isChat);
@@ -758,14 +746,13 @@ function show(view){
   document.getElementById("viewDash").classList.toggle("hide",!isDash);
   document.getElementById("viewRuns").classList.toggle("hide",!isRuns);
   navChat.classList.toggle("active",isChat);
-  navDash.classList.toggle("active",isDash);
   navRuns.classList.toggle("active",isRuns);
   // the left panel belongs to whichever view is active
   document.getElementById("chatsPanel").classList.toggle("hide",isRuns);
   document.getElementById("runsPanel").classList.toggle("hide",!isRuns);
   document.getElementById("mainTitle").textContent=isChat?"Ask retriEVAL":(isRuns?"Evals":"Dashboard");
 }
-navChat.onclick=()=>show("chat");navDash.onclick=()=>show("dash");navRuns.onclick=()=>show("runs");
+navChat.onclick=()=>show("chat");navRuns.onclick=()=>show("runs");
 
 /* chat + sessions (localStorage-persisted) */
 (function(){
@@ -943,36 +930,11 @@ navChat.onclick=()=>show("chat");navDash.onclick=()=>show("dash");navRuns.onclic
   }
 
   // per-chat side panel: evals count + every metric measured in THIS conversation
-  function renderChatSide(){
-    const s=cur();const evals=(s&&s.evals)||[];
-    document.getElementById("sRuns").textContent=evals.length;
-    // aggregate each metric across this chat's evals (weighted by case count n)
-    const byMetric={};
-    for(const e of evals){
-      const agg=e.aggregate||{};
-      for(const [m,a] of Object.entries(agg)){
-        if(a&&typeof a.mean_score==="number"){
-          const n=a.n||1;(byMetric[m]=byMetric[m]||{sum:0,w:0,pr:0,prw:0});
-          byMetric[m].sum+=a.mean_score*n;byMetric[m].w+=n;
-          if(typeof a.pass_rate==="number"){byMetric[m].pr+=a.pass_rate*n;byMetric[m].prw+=n;}
-        }
-      }
-    }
-    const names=Object.keys(byMetric).sort();
-    const el=document.getElementById("sMetrics");
-    if(!names.length){el.innerHTML='<div style="color:var(--faint);font-size:11.5px;padding:4px 0">No evals in this chat yet.</div>';return;}
-    el.innerHTML=names.map(m=>{
-      const d=byMetric[m];const avg=d.w?d.sum/d.w:null;
-      const col=avg==null?"var(--faint)":(avg>=0.7?"var(--pass)":(avg>=0.4?"var(--warn)":"var(--fail)"));
-      const tcol=avg==null?"var(--muted)":(avg>=0.7?"var(--pass-ink)":"var(--fail-ink)");
-      const pct=Math.max(2,Math.round((avg||0)*100));
-      return `<div class="smetric">
-        <div class="sr"><span class="snm">${m}</span><span class="sv" style="color:${tcol}">${fm(avg)}</span></div>
-        <div class="strack"><div class="sfill" style="width:${pct}%;background:${col}"></div></div>
-      </div>`;
-    }).join("");
-  }
-  window.renderChatSide=renderChatSide; // let load() refresh it too
+  // the per-chat side panel was removed; no-op keeps the existing call sites
+  // (renderThread, load, session switching) valid without touching each one
+  function renderChatSide(){}
+
+  window.renderChatSide=renderChatSide;
 
   // first message, cleaned up: collapse whitespace, drop filler openers and
   // trailing punctuation, then cap — "can you please run faithfulness on my
