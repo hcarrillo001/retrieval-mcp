@@ -28,24 +28,49 @@ from paths import home
 # Swappable FREE models for the public sandbox. Keys live ONLY on the server
 # (set the *_key_env var on Railway); the browser only ever sends the short id.
 # All are OpenAI-compatible endpoints, so they run through the _openai backend.
+def _pretty(model_id: str) -> str:
+    """'openai/gpt-oss-120b' -> 'gpt-oss-120b'. Vendor prefixes and ':free'
+    suffixes are routing detail, not something a visitor needs to read."""
+    name = model_id.split("/")[-1]
+    # ':free' is an OpenRouter routing marker; ':20b' is an Ollama size tag —
+    # drop the first, keep the second
+    if name.endswith(":free"):
+        name = name[:-len(":free")]
+    return name.replace(":", " ") or model_id
+
+
+def _label(env_var: str, provider: str, model_id: str) -> str:
+    """Dropdown label. Set <env_var> to override; otherwise it is generated from
+    whatever model is actually configured, so swapping a retired model updates
+    the UI at the same time instead of leaving a stale name on screen."""
+    return os.environ.get(env_var) or f"{_pretty(model_id)} \u00b7 {provider}"
+
+
+def _model(env_var: str, default: str) -> str:
+    """Provider model ids get retired without notice (Groq dropped
+    llama-3.3-70b-versatile). Reading them from env means a dead model is a
+    Railway env change plus a restart, not a code push and redeploy."""
+    return os.environ.get(env_var, default)
+
+
 SANDBOX_PRESETS = {
     "groq-llama": {
-        "label": "Llama 3.3 70B · via Groq (free)",
+        "label": _label("GROQ_LABEL", "via Groq (free)", _model("GROQ_MODEL", "llama-3.3-70b-versatile")),
         "base_url": "https://api.groq.com/openai/v1",
         "key_env": "GROQ_API_KEY",
-        "model": "llama-3.3-70b-versatile",
+        "model": _model("GROQ_MODEL", "llama-3.3-70b-versatile"),
     },
     "gemini-flash": {
-        "label": "Gemini 2.5 Flash · Google (free)",
+        "label": _label("GEMINI_LABEL", "Google (free)", _model("GEMINI_MODEL", "gemini-2.5-flash")),
         "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
         "key_env": "GEMINI_API_KEY",
-        "model": "gemini-2.5-flash",
+        "model": _model("GEMINI_MODEL", "gemini-2.5-flash"),
     },
     "qwen-72b": {
-        "label": "Qwen 2.5 72B · via OpenRouter (free)",
+        "label": _label("QWEN_LABEL", "via OpenRouter (free)", _model("QWEN_MODEL", "qwen/qwen-2.5-72b-instruct:free")),
         "base_url": "https://openrouter.ai/api/v1",
         "key_env": "OPENROUTER_API_KEY",
-        "model": "qwen/qwen-2.5-72b-instruct:free",
+        "model": _model("QWEN_MODEL", "qwen/qwen-2.5-72b-instruct:free"),
     },
     "deepseek": {
         # DeepSeek (Chinese) via OpenRouter's free slot — same OPENROUTER_API_KEY as
@@ -53,19 +78,19 @@ SANDBOX_PRESETS = {
         # e.g. deepseek/deepseek-r1:free or deepseek/deepseek-chat-v3-0324:free).
         # DeepSeek also has a cheap (not free) direct API at https://api.deepseek.com
         # with model "deepseek-chat" if you'd rather have reliability over a free tier.
-        "label": "DeepSeek V3 · via OpenRouter (free)",
+        "label": _label("DEEPSEEK_LABEL", "via OpenRouter (free)", _model("DEEPSEEK_MODEL", "deepseek/deepseek-chat-v3-0324:free")),
         "base_url": "https://openrouter.ai/api/v1",
         "key_env": "OPENROUTER_API_KEY",
-        "model": "deepseek/deepseek-chat-v3-0324:free",
+        "model": _model("DEEPSEEK_MODEL", "deepseek/deepseek-chat-v3-0324:free"),
     },
     "ollama-cloud": {
         # Ollama Cloud's OpenAI-compatible endpoint. VERIFY the exact base URL and
         # model id at docs.ollama.com/cloud (host may be ollama.com/v1 vs
         # api.ollama.com/v1; lighter models like gpt-oss:20b stretch the free quota).
-        "label": "gpt-oss 20B · Ollama Cloud (free)",
+        "label": _label("OLLAMA_CLOUD_LABEL", "Ollama Cloud (free)", _model("OLLAMA_CLOUD_MODEL", "gpt-oss:20b")),
         "base_url": "https://ollama.com/v1",
         "key_env": "OLLAMA_API_KEY",
-        "model": "gpt-oss:20b",
+        "model": _model("OLLAMA_CLOUD_MODEL", "gpt-oss:20b"),
     },
 }
 DEFAULT_SANDBOX_MODEL = os.environ.get("SANDBOX_DEFAULT_MODEL", "groq-llama")
@@ -262,6 +287,24 @@ def _openai(system: str, user: str, max_tokens: int = 1024) -> str:
             detail = e.read().decode("utf-8", "replace")[:400]
         except Exception:
             detail = ""
+        # a retired/renamed model id is the most common failure here, and the raw
+        # provider blob reads as "this product is broken" to anyone trying it
+        if e.code == 404 or "model_not_found" in detail:
+            raise RuntimeError(
+                f"This judge model is unavailable right now (the provider no longer "
+                f"serves '{model}'). Pick another model from the list \u2014 the others "
+                f"are unaffected."
+            ) from None
+        if e.code == 429:
+            raise RuntimeError(
+                "The free judge is busy right now (provider rate limit). Wait a moment "
+                "and try again, or pick another model from the list."
+            ) from None
+        if e.code in (401, 403):
+            raise RuntimeError(
+                "This judge model isn't configured on the server (missing or rejected "
+                "API key). Pick another model from the list."
+            ) from None
         raise RuntimeError(f"judge HTTP {e.code} from {base}: {detail or e.reason}") from None
 
 
