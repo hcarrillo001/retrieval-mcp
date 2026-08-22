@@ -191,16 +191,24 @@ export default async function handler(req, res) {
   // GET ?models=1 -> the judge list the server actually has configured, so the
   // picker can't advertise a model that was retired or removed server-side
   if (req.method === "GET" && "models" in (req.query || {})) {
-    if (!serverUrl) return res.status(503).json({ error: "sandbox not configured" });
-    try {
-      const r = await fetch(`${serverUrl.replace(/\/$/, "")}/sandbox/models`, {
-        headers: secret ? { "X-Sandbox-Secret": secret } : {},
-      });
-      if (!r.ok) return res.status(502).json({ error: "models unavailable" });
-      return res.status(200).json(await r.json());
-    } catch {
-      return res.status(502).json({ error: "models unavailable" });
+    // Prefer the server's own list — it knows what is really configured.
+    if (serverUrl) {
+      try {
+        const r = await fetch(`${serverUrl.replace(/\/$/, "")}/sandbox/models`, {
+          headers: secret ? { "X-Sandbox-Secret": secret } : {},
+        });
+        if (r.ok) return res.status(200).json(await r.json());
+      } catch { /* fall through to the env fallback below */ }
     }
+    // Fallback: name the judge from this function's own env, so the picker still
+    // shows the real model instead of a vague placeholder when the server list
+    // can't be reached. Keep GROQ_MODEL here in sync with Railway.
+    const model = process.env.GROQ_MODEL || "openai/gpt-oss-120b";
+    const pretty = model.split("/").pop().replace(/:free$/, "").replace(":", " ");
+    return res.status(200).json({
+      models: [{ id: "groq-llama",
+                 label: process.env.GROQ_LABEL || `${pretty} · via Groq (free)` }],
+    });
   }
 
   if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
