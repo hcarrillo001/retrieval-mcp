@@ -330,11 +330,7 @@
       </div>
       <div class="sb-lbl">3 · Judge model</div>
       <select id="sbModel">
-        <option value="groq-llama">Llama 3.3 70B · via Groq (free)</option>
-        <option value="gemini-flash">Gemini 2.5 Flash · Google (free)</option>
-        <option value="qwen-72b">Qwen 2.5 72B · via OpenRouter (free)</option>
-        <option value="deepseek">DeepSeek V3 · via OpenRouter (free)</option>
-        <option value="ollama-cloud">gpt-oss 20B · Ollama Cloud (free)</option>
+        <option value="groq-llama">loading models…</option>
       </select>
       <button class="sb-run" id="sbRun">Run sample eval</button>
       <p class="sb-foot" id="sbFoot">Runs on a free model · nothing is saved · limited per day</p>
@@ -667,6 +663,26 @@ URL: https://retrieval-mcp-production.up.railway.app/mcp
       runEval(payload);
     };
   })();
+</script>
+
+<script>
+// the judge list comes from the server, so a model retired or removed on the
+// backend can never leave a dead option in this picker
+(async function () {
+  var sel = document.getElementById("sbModel");
+  if (!sel) return;
+  try {
+    var r = await fetch("/api/sandbox?models=1");
+    if (!r.ok) throw new Error(r.status);
+    var models = (await r.json()).models || [];
+    if (!models.length) throw new Error("empty");
+    sel.innerHTML = models.map(function (m) {
+      return '<option value="' + m.id + '">' + m.label + "</option>";
+    }).join("");
+  } catch (e) {
+    sel.innerHTML = '<option value="groq-llama">default judge</option>';
+  }
+})();
 </script>
 </body>
 </html>

@@ -185,10 +185,26 @@ function clip(v) {
 }
 
 export default async function handler(req, res) {
-  if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
-
   const serverUrl = process.env.RETRIEVAL_SANDBOX_URL;
   const secret = process.env.SANDBOX_SECRET;
+
+  // GET ?models=1 -> the judge list the server actually has configured, so the
+  // picker can't advertise a model that was retired or removed server-side
+  if (req.method === "GET" && "models" in (req.query || {})) {
+    if (!serverUrl) return res.status(503).json({ error: "sandbox not configured" });
+    try {
+      const r = await fetch(`${serverUrl.replace(/\/$/, "")}/sandbox/models`, {
+        headers: secret ? { "X-Sandbox-Secret": secret } : {},
+      });
+      if (!r.ok) return res.status(502).json({ error: "models unavailable" });
+      return res.status(200).json(await r.json());
+    } catch {
+      return res.status(502).json({ error: "models unavailable" });
+    }
+  }
+
+  if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
+
   if (!serverUrl || !secret) {
     return res.status(503).json({ error: "sandbox not configured" });
   }

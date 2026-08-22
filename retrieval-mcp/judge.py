@@ -55,43 +55,15 @@ def _model(env_var: str, default: str) -> str:
 
 SANDBOX_PRESETS = {
     "groq-llama": {
-        "label": _label("GROQ_LABEL", "via Groq (free)", _model("GROQ_MODEL", "llama-3.3-70b-versatile")),
+        "label": _label("GROQ_LABEL", "via Groq (free)", _model("GROQ_MODEL", "openai/gpt-oss-120b")),
         "base_url": "https://api.groq.com/openai/v1",
         "key_env": "GROQ_API_KEY",
-        "model": _model("GROQ_MODEL", "llama-3.3-70b-versatile"),
+        "model": _model("GROQ_MODEL", "openai/gpt-oss-120b"),
     },
-    "gemini-flash": {
-        "label": _label("GEMINI_LABEL", "Google (free)", _model("GEMINI_MODEL", "gemini-2.5-flash")),
-        "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
-        "key_env": "GEMINI_API_KEY",
-        "model": _model("GEMINI_MODEL", "gemini-2.5-flash"),
-    },
-    "qwen-72b": {
-        "label": _label("QWEN_LABEL", "via OpenRouter (free)", _model("QWEN_MODEL", "qwen/qwen-2.5-72b-instruct:free")),
-        "base_url": "https://openrouter.ai/api/v1",
-        "key_env": "OPENROUTER_API_KEY",
-        "model": _model("QWEN_MODEL", "qwen/qwen-2.5-72b-instruct:free"),
-    },
-    "deepseek": {
-        # DeepSeek (Chinese) via OpenRouter's free slot — same OPENROUTER_API_KEY as
-        # Qwen. VERIFY the current free slug on openrouter.ai (free model ids churn,
-        # e.g. deepseek/deepseek-r1:free or deepseek/deepseek-chat-v3-0324:free).
-        # DeepSeek also has a cheap (not free) direct API at https://api.deepseek.com
-        # with model "deepseek-chat" if you'd rather have reliability over a free tier.
-        "label": _label("DEEPSEEK_LABEL", "via OpenRouter (free)", _model("DEEPSEEK_MODEL", "deepseek/deepseek-chat-v3-0324:free")),
-        "base_url": "https://openrouter.ai/api/v1",
-        "key_env": "OPENROUTER_API_KEY",
-        "model": _model("DEEPSEEK_MODEL", "deepseek/deepseek-chat-v3-0324:free"),
-    },
-    "ollama-cloud": {
-        # Ollama Cloud's OpenAI-compatible endpoint. VERIFY the exact base URL and
-        # model id at docs.ollama.com/cloud (host may be ollama.com/v1 vs
-        # api.ollama.com/v1; lighter models like gpt-oss:20b stretch the free quota).
-        "label": _label("OLLAMA_CLOUD_LABEL", "Ollama Cloud (free)", _model("OLLAMA_CLOUD_MODEL", "gpt-oss:20b")),
-        "base_url": "https://ollama.com/v1",
-        "key_env": "OLLAMA_API_KEY",
-        "model": _model("OLLAMA_CLOUD_MODEL", "gpt-oss:20b"),
-    },
+    # Other providers (Gemini, OpenRouter/Qwen, OpenRouter/DeepSeek, Ollama Cloud)
+    # were removed while their free model ids are unverified — a dead option in a
+    # public picker is worse than a short list. To restore one, add a block here
+    # with its base_url/key_env and a *_MODEL env var; the label generates itself.
 }
 DEFAULT_SANDBOX_MODEL = os.environ.get("SANDBOX_DEFAULT_MODEL", "groq-llama")
 
