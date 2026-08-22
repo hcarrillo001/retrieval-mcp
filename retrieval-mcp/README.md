@@ -1,9 +1,65 @@
-# RetriEval
+# retriEVAL
 
-An **eval MCP** — DeepEval-style metrics, golden sets, authored custom metrics,
-charts, and run history, exposed over the Model Context Protocol. Runs locally
-over stdio for dev, or deploys as an authenticated HTTP service you can reach
-from anywhere. Claude is the judge by default; a local Ollama model is a swap.
+**LLM evaluation as an MCP server.** Score your AI's outputs for faithfulness,
+relevancy, and hallucination from inside any MCP client — no pipeline, no test
+harness. Every result comes back with a link to a dashboard that keeps the history.
+
+**[Try it live](https://retrieval-mcp.com)** (no signup) · **[Watch the 2-minute demo](https://youtu.be/zpXiv9isDmg)** · **[Dashboard](https://retrieval-mcp.com/dashboard)**
+
+---
+
+## Why
+
+Five customer-support answers, scored on two metrics:
+
+| metric | score | passing |
+|---|---|---|
+| answer_relevancy | 0.98 | 5/5 |
+| faithfulness | 0.70 | 3/5 |
+
+Every answer was on-topic and well-written. Two of them contradicted the policy
+they were supposedly grounded in — one promised free return shipping the policy
+doesn't offer, another invented a free overnight replacement. Reviewing by eye,
+you'd sign off on all five.
+
+That gap is the point. Relevancy asks *did it answer the question*. Faithfulness
+asks *is it actually in the source*. You need both, and the second one catches
+the expensive failures.
+
+## Connect
+
+Add as a custom connector in Claude, Claude Desktop, or any MCP client:
+
+```
+https://retrieval-mcp-production.up.railway.app/mcp?key=YOUR_TOKEN
+```
+
+The token goes in the URL rather than a header — chat clients don't offer
+request-header auth. Then just ask:
+
+> Score this answer against my docs with faithfulness.
+
+Or run locally over stdio for development — see [Run locally (stdio)](#run-locally-stdio--claude-desktop) below.
+
+## What you get
+
+- **9 built-in metrics** plus custom metrics you author in plain English
+- **Swappable judges** — Anthropic, Groq, Gemini, OpenRouter, or a local Ollama
+  model, so nothing has to leave your network
+- **Golden sets** from files, URLs, inline JSON, JSONL, CSV, or TSV
+- **Run history** in Supabase with shareable permalinks and run comparison
+- **A spend cap**, because a judge-based tool can otherwise run up a bill
+
+## Honest limitations
+
+- Judge agreement hasn't been validated against human labels yet, so treat
+  scores as a signal rather than ground truth.
+- Golden sets currently hold their own outputs, so re-running one against new
+  model outputs means loading a second set. Splitting them is the next change.
+- Golden sets and authored metrics live in the server process and are lost on
+  restart. Runs persist; those don't.
+
+---
 
 ## Metrics (DeepEval-aligned)
 
@@ -149,3 +205,9 @@ export RETRIEVAL_JUDGE_MODEL=deepseek-r1:70b
 | `list_runs(golden_set, last_n)` | saved runs |
 | `plot_metric_trend / plot_run / compare_runs` | inline charts |
 | `get_budget / reset_budget` | spend cap status / reset |
+
+---
+
+## License
+
+Apache License 2.0. Built by Hanns Carrillo.
