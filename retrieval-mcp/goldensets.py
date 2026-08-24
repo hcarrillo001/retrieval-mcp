@@ -88,14 +88,30 @@ def load_records(path_or_inline, fmt: str = "auto") -> list:
         exists = False  # too long / invalid to be a path: fall through to inline
 
     if not exists:
-        # treat as inline JSON (object-per-line or a JSON array)
+        # inline text: JSON array, JSONL, or pasted CSV/TSV. People paste
+        # spreadsheet exports straight into chat, so a header row that isn't
+        # JSON should parse as delimited text rather than raise a JSON error.
         try:
             data = json.loads(text)
             data = data if isinstance(data, list) else [data]
             return [_normalize(r) for r in data]
         except json.JSONDecodeError:
+            pass
+        try:
             rows = [json.loads(line) for line in text.splitlines() if line.strip()]
             return [_normalize(r) for r in rows]
+        except json.JSONDecodeError:
+            pass
+        lines = [l for l in text.splitlines() if l.strip()]
+        if len(lines) >= 2:
+            delim = "\t" if lines[0].count("\t") > lines[0].count(",") else ","
+            rows = list(csv.DictReader(lines, delimiter=delim))
+            if rows and any(v for v in rows[0].values()):
+                return [_normalize(r) for r in rows]
+        raise ValueError(
+            "Could not parse the cases. Expected a JSON array, JSONL "
+            "(one object per line), CSV/TSV with a header row, a file path, or a URL."
+        )
 
     if fmt == "auto":
         fmt = p.suffix.lstrip(".").lower()

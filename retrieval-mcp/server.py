@@ -266,10 +266,17 @@ def author_metric(name: str, criteria: str, examples: Optional[List[str]] = None
 
 
 @mcp.tool()
-def run_eval(golden_set: str, metrics: List[str], threshold: float = 0.7,
+def run_eval(metrics: List[str], golden_set: str = "", cases: str = "",
+             threshold: float = 0.7,
              outputs: Optional[List[str]] = None, label: str = "",
              limit: int = 3, generator_model: str = "", judge_model: str = "") -> dict:
-    """Run metrics over a loaded golden set. All cases are scored, but only the
+    """Run metrics over a set of cases. Pass `cases` with the data inline (JSON,
+    JSONL, CSV or TSV text, or a file path) to score in a single call — nothing is
+    stored server-side and no prior load is needed. Or pass `golden_set` to reuse a
+    set loaded earlier with load_golden_set. Inline `cases` is preferred: named sets
+    live only in this server process, are shared with anyone else using it, and are
+    lost when it restarts.
+    All cases are scored, but only the
     `limit` lowest-scoring cases are returned by default (3) to keep replies short;
     `total_cases`/`shown` tell you how many more exist — call show_run_cases to page.
     Pass `generator_model` (which LLM produced the outputs) and `judge_model` (which
@@ -280,10 +287,26 @@ def run_eval(golden_set: str, metrics: List[str], threshold: float = 0.7,
     when you summarise everything else. `summary_md` is a ready-to-render
     markdown block (score table + link) that can be shown verbatim.
     Raises if the spend cap is hit mid-run; partial spend is still metered."""
-    if golden_set not in GOLDEN_SETS:
-        raise ValueError(f"No golden set '{golden_set}'. Load one first.")
+    # inline data wins: it is self-contained and needs no server-side state
+    if cases:
+        case_list = load_records(cases)
+        if not case_list:
+            raise ValueError("`cases` parsed to zero cases — check the format.")
+        set_name = golden_set or "inline"
+    elif golden_set:
+        if golden_set not in GOLDEN_SETS:
+            raise ValueError(
+                f"No golden set '{golden_set}' in this server process. Pass the data "
+                f"inline via `cases` instead, or call load_golden_set first. "
+                f"(Named sets are lost when the server restarts.)"
+            )
+        case_list = GOLDEN_SETS[golden_set]
+        set_name = golden_set
+    else:
+        raise ValueError("Pass either `cases` (the data inline) or `golden_set`.")
     judge_model = judge_model or os.environ.get("RETRIEVAL_JUDGE_MODEL", "claude-sonnet-4-6")
-    cases = GOLDEN_SETS[golden_set]
+    cases = case_list
+    golden_set = set_name
     if outputs is not None:
         if len(outputs) != len(cases):
             raise ValueError(f"{len(outputs)} outputs vs {len(cases)} cases")
