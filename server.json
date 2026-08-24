@@ -1,0 +1,46 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.hcarrillo001/retrieval-mcp",
+  "title": "retriEVAL",
+  "description": "LLM evaluation as MCP tools. Score outputs for faithfulness, relevancy, and hallucination against your own cases, with claim-level explanations and run history. Runs locally; bring your own judge (Anthropic, OpenAI, Groq, or a local Ollama model).",
+  "websiteUrl": "https://retrieval-mcp.com",
+  "repository": {
+    "url": "https://github.com/hcarrillo001/retrieval-mcp",
+    "source": "github"
+  },
+  "version": "1.0.0",
+  "packages": [
+    {
+      "registryType": "oci",
+      "identifier": "ghcr.io/hcarrillo001/retrieval-mcp",
+      "version": "1.0.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "ANTHROPIC_API_KEY",
+          "description": "Judge model API key. Not needed if you set RETRIEVAL_JUDGE_BACKEND=ollama to run the judge locally.",
+          "isRequired": false,
+          "isSecret": true
+        },
+        {
+          "name": "RETRIEVAL_JUDGE_BACKEND",
+          "description": "Which judge to score with: anthropic (default), openai, or ollama for a fully local judge.",
+          "isRequired": false,
+          "default": "anthropic"
+        },
+        {
+          "name": "RETRIEVAL_JUDGE_MODEL",
+          "description": "Judge model id, e.g. claude-sonnet-4-6 or qwen2.5:14b for Ollama.",
+          "isRequired": false
+        },
+        {
+          "name": "RETRIEVAL_BUDGET_USD",
+          "description": "Spend cap for judge calls. Unset means no cap.",
+          "isRequired": false
+        }
+      ]
+    }
+  ]
+}

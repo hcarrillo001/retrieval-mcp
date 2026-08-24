@@ -1,0 +1,30 @@
+# Published image for self-hosting retriEVAL as a local MCP server (stdio).
+#
+# This is deliberately separate from ./Dockerfile, which runs app.py for the
+# HTTP deployment. Railway builds that one; this one is what people pull to run
+# the server themselves. Keeping them apart means a change here can't break the
+# live deployment.
+#
+# Build:  docker build -f Dockerfile.mcp -t ghcr.io/hcarrillo001/retrieval-mcp .
+# Run:    docker run -i --rm -e ANTHROPIC_API_KEY=sk-ant-... ghcr.io/hcarrillo001/retrieval-mcp
+
+FROM python:3.12-slim
+
+# The MCP registry verifies image ownership through this label — it must match
+# the `name` field in server.json exactly, or publishing is rejected.
+LABEL io.modelcontextprotocol.server.name="io.github.hcarrillo001/retrieval-mcp"
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+# Runs saved to disk rather than Supabase by default: a self-hosted user's eval
+# data should stay on their machine unless they opt into a database.
+ENV RETRIEVAL_HOME=/data
+VOLUME ["/data"]
+
+# stdio, not HTTP — this is what an MCP client spawns and talks to over stdin.
+CMD ["python", "server.py"]
