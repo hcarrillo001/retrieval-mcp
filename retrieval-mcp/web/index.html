@@ -411,29 +411,34 @@
 
 <section id="quickstart"><div class="wrap">
   <h2>Quickstart</h2>
-  <p class="lead">Connect the hosted server to any MCP client &mdash; nothing to install.</p>
+  <p class="lead">Self-hosted. Clone it, point it at a judge, run it &mdash; your data never leaves your machine.</p>
   <div class="twocol">
     <div>
-      <div class="colh">Connect (Claude.ai, Claude Desktop, any MCP client)</div>
-      <pre><button class="copy" data-c="https://retrieval-mcp-production.up.railway.app/mcp?key=YOUR_TOKEN">copy</button><span class="c"># Settings &rarr; Connectors &rarr; Add custom connector</span>
-URL: https://retrieval-mcp-production.up.railway.app/mcp
-     ?key=YOUR_TOKEN
+      <div class="colh">Install &amp; run</div>
+      <pre><button class="copy" data-c="git clone https://github.com/hcarrillo001/retrieval-mcp
+cd retrieval-mcp
+pip install -r requirements.txt
+export ANTHROPIC_API_KEY=sk-ant-...
+python server.py">copy</button>git clone https://github.com/hcarrillo001/retrieval-mcp
+cd retrieval-mcp
+pip install -r requirements.txt
 
-<span class="c"># the token goes in the URL, not a header &mdash;</span>
-<span class="c"># chat clients don't offer request-header auth</span></pre>
+<span class="c"># pick a judge &mdash; or use a local one, below</span>
+export ANTHROPIC_API_KEY=sk-ant-...
+python server.py</pre>
     </div>
     <div>
       <div class="colh">Then just ask</div>
-      <pre><button class="copy" data-c="Score this answer against my docs with faithfulness, then give me the dashboard link.">copy</button><span class="c"># in the chat</span>
-"Score this answer against my docs
- with faithfulness."
+      <pre><button class="copy" data-c="Score these cases with faithfulness and answer_relevancy: [{&quot;input&quot;:&quot;...&quot;,&quot;actual_output&quot;:&quot;...&quot;,&quot;retrieval_context&quot;:[&quot;...&quot;]}]">copy</button><span class="c"># in the chat &mdash; paste your cases inline</span>
+"Score these cases with faithfulness:
+ [{"input": "...",
+   "actual_output": "...",
+   "retrieval_context": ["..."]}]"
 
-<span class="c"># every result comes back with a link</span>
-"View this result in the dashboard"
- &rarr; retrieval-mcp.com/dashboard?run=...</pre>
+<span class="c"># nothing is stored, no setup step</span></pre>
     </div>
   </div>
-  <p class="lead" style="margin-top:18px">Pick your judge: free local <code>Ollama</code> (<code>RETRIEVAL_JUDGE_BACKEND=ollama</code>), your <code>Anthropic</code> key, your <code>OpenAI</code> key, or any OpenAI-compatible endpoint via <code>OPENAI_BASE_URL</code>. Self-hosting guide (Supabase + Railway + Vercel) coming with the public repo.</p>
+  <p class="lead" style="margin-top:18px">Pick your judge: free local <code>Ollama</code> (<code>RETRIEVAL_JUDGE_BACKEND=ollama</code>) to keep everything on your machine, or your <code>Anthropic</code> key, your <code>OpenAI</code> key, or any OpenAI-compatible endpoint via <code>OPENAI_BASE_URL</code>. Full setup, including your own always-on instance with a dashboard, is in the <a href="https://github.com/hcarrillo001/retrieval-mcp" style="color:var(--blue)">repo README</a>.</p>
 </div></section>
 
 <section id="demos"><div class="wrap">
