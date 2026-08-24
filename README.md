@@ -28,18 +28,34 @@ the expensive failures.
 
 ## Connect
 
-Add as a custom connector in Claude, Claude Desktop, or any MCP client:
+Self-hosted. Clone it, point it at a judge, run it — your data never leaves your
+machine and there's no service to sign up for.
 
+```bash
+git clone https://github.com/hcarrillo001/retrieval-mcp
+cd retrieval-mcp
+pip install -r requirements.txt
+
+export ANTHROPIC_API_KEY=sk-ant-...        # or a local judge, below
+python server.py                            # stdio, for Claude Desktop / Cursor
 ```
-https://retrieval-mcp-production.up.railway.app/mcp?key=YOUR_TOKEN
-```
 
-The token goes in the URL rather than a header — chat clients don't offer
-request-header auth. Then just ask:
+Then just ask:
 
-> Score this answer against my docs with faithfulness.
+> Score these cases with faithfulness: [{"input": "...", "actual_output": "...", "retrieval_context": ["..."]}]
 
-Or run locally over stdio for development — see [Run locally (stdio)](#run-locally-stdio--claude-desktop) below.
+Pass your cases inline and nothing is stored — one call, no setup step. See
+[Run locally (stdio)](#run-locally-stdio--claude-desktop) for client config, and
+[Deploy as HTTP](#deploy-as-http-reach-it-from-anywhere) if you want your own
+always-on instance with a dashboard.
+
+**Want to try it before installing anything?** There's a live sandbox at
+[retrieval-mcp.com](https://retrieval-mcp.com) — no signup, runs on a free judge,
+nothing saved.
+
+**Keeping everything local:** set `RETRIEVAL_JUDGE_BACKEND=ollama` and the judge
+runs on your machine too, so no data leaves your network at any point. Useful if
+you're evaluating anything you can't send to a third party.
 
 ## What you get
 
@@ -195,10 +211,10 @@ export RETRIEVAL_JUDGE_MODEL=deepseek-r1:70b
 | Tool | Purpose |
 |------|---------|
 | `list_metrics` | built-in + authored metrics |
-| `load_golden_set(name, source, fmt)` | file / URL / inline / JSONL-CSV |
+| `load_golden_set(name, source, fmt)` | name a set for reuse (self-host only — shared and lost on restart) |
 | `list_golden_sets` | what's loaded |
 | `author_metric(name, criteria, examples)` | plain language → a scorer |
-| `run_eval(golden_set, metrics, threshold, outputs, label, limit)` | score; shows top 3 |
+| `run_eval(metrics, cases, golden_set, threshold, outputs, label, limit)` | score a set; pass `cases` inline (JSON/JSONL/CSV/TSV/path/URL) — nothing stored |
 | `show_run_cases(run_id, offset, limit, metric)` | page the rest |
 | `evaluate_case(...)` | one-off score |
 | `ground_against_url(url, output, question)` | check an output's *consistency* with a web page (no labels — consistency, not correctness) |
