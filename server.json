@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.hcarrillo001/retrieval-mcp",
   "title": "retriEVAL",
-  "description": "LLM evaluation as MCP tools. Score outputs for faithfulness, relevancy, and hallucination against your own cases, with claim-level explanations and run history. Runs locally; bring your own judge (Anthropic, OpenAI, Groq, or a local Ollama model).",
+  "description": "LLM evals as MCP tools: score outputs for faithfulness, relevancy, and hallucination.",
   "websiteUrl": "https://retrieval-mcp.com",
   "repository": {
     "url": "https://github.com/hcarrillo001/retrieval-mcp",
@@ -12,8 +12,7 @@
   "packages": [
     {
       "registryType": "oci",
-      "identifier": "ghcr.io/hcarrillo001/retrieval-mcp",
-      "version": "1.0.0",
+      "identifier": "ghcr.io/hcarrillo001/retrieval-mcp:1.0.0",
       "transport": {
         "type": "stdio"
       },
