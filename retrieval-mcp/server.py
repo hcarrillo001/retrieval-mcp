@@ -158,6 +158,111 @@ def _dashboard_link(run_id: str) -> str:
     return f"{base}/dashboard{q}"
 
 
+# ---------------------------------------------------------------------------
+# MCP Apps widget (experimental)
+#
+# Clients that implement the MCP Apps extension render this HTML inline in the
+# conversation; clients that don't just ignore the _meta hint and show the text
+# result as before. Deliberately one small self-contained file: no external CSS,
+# no fonts, no scripts beyond the inline reader, because it runs in a sandboxed
+# iframe with no network.
+# ---------------------------------------------------------------------------
+
+SCORES_WIDGET_URI = "ui://retrieval-mcp/scores"
+
+_SCORES_HTML = """<!doctype html>
+<meta charset="utf-8">
+<style>
+  :root { color-scheme: light dark; }
+  body { margin:0; padding:14px 16px; font:14px/1.5 -apple-system,BlinkMacSystemFont,
+         "Segoe UI",Roboto,sans-serif; color:#18181B; background:transparent; }
+  @media (prefers-color-scheme: dark) { body { color:#E4E4E7; } }
+  .hd { font-size:12.5px; opacity:.65; margin-bottom:12px; }
+  .row { display:flex; align-items:center; gap:10px; margin-bottom:9px; }
+  .nm { flex:0 0 150px; font-size:12.5px; font-family:ui-monospace,SFMono-Regular,
+        Menlo,monospace; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .track { flex:1; height:9px; border-radius:99px; background:rgba(128,128,128,.18);
+           position:relative; overflow:hidden; min-width:60px; }
+  .fill { position:absolute; inset:0 auto 0 0; border-radius:99px; }
+  .thr { position:absolute; top:-3px; bottom:-3px; width:2px; background:currentColor;
+         opacity:.35; }
+  .v { flex:0 0 34px; text-align:right; font-size:12.5px; font-variant-numeric:tabular-nums;
+       font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+  .pill { flex:0 0 auto; font-size:10px; font-weight:700; letter-spacing:.03em;
+          padding:3px 8px; border-radius:6px; font-family:ui-monospace,monospace; }
+  .pass { background:rgba(5,150,105,.15); color:#059669; }
+  .fail { background:rgba(225,29,72,.15); color:#E11D48; }
+  .ft { font-size:11.5px; opacity:.6; margin-top:12px; }
+  .ft a { color:inherit; }
+</style>
+<div id="root">Loading…</div>
+<script>
+  // The host hands the tool result to the widget. Different hosts have used
+  // slightly different channels while this extension settles, so accept all
+  // three rather than betting on one.
+  function paint(data) {
+    if (!data) return;
+    var agg = data.aggregate || {};
+    var thr = typeof data.threshold === "number" ? data.threshold : 0.7;
+    var names = Object.keys(agg);
+    if (!names.length) { document.getElementById("root").textContent = "No scores."; return; }
+
+    var failing = names.filter(function (m) {
+      var v = (agg[m] || {}).mean_score; return v == null || v < thr;
+    }).length;
+
+    var n = data.total_cases != null ? data.total_cases : data.cases;
+    var html = '<div class="hd">' + names.length + " metric" + (names.length === 1 ? "" : "s")
+      + " on " + (n == null ? "?" : n) + " case" + (n === 1 ? "" : "s")
+      + (failing ? " \u00b7 " + failing + " failing" : " \u00b7 all pass") + "</div>";
+
+    names.forEach(function (m) {
+      var sc = (agg[m] || {}).mean_score;
+      var ok = sc != null && sc >= thr;
+      var pct = Math.max(2, Math.round((sc || 0) * 100));
+      var col = sc == null ? "#A1A1AA" : (ok ? "#059669" : (sc >= 0.4 ? "#D97706" : "#E11D48"));
+      html += '<div class="row">'
+        + '<span class="nm" title="' + m + '">' + m + "</span>"
+        + '<span class="track"><span class="fill" style="width:' + pct + "%;background:" + col + '"></span>'
+        + '<span class="thr" style="left:' + Math.round(thr * 100) + '%"></span></span>'
+        + '<span class="v">' + (sc == null ? "\u2014" : Number(sc).toFixed(2).replace(/^0/, "")) + "</span>"
+        + '<span class="pill ' + (ok ? "pass" : "fail") + '">' + (ok ? "PASS" : "FAIL") + "</span>"
+        + "</div>";
+    });
+
+    html += '<div class="ft">threshold ' + thr.toFixed(2)
+      + (data.view_url ? ' \u00b7 <a href="' + data.view_url + '" target="_blank">open the full run</a>' : "")
+      + "</div>";
+    document.getElementById("root").innerHTML = html;
+  }
+
+  // 1. injected directly on the window by the host
+  if (window.mcpData) paint(window.mcpData);
+
+  // 2. postMessage from the host frame
+  window.addEventListener("message", function (e) {
+    var d = e.data || {};
+    paint(d.mcpData || d.data || (d.result && d.result.structuredContent) || d.structuredContent);
+  });
+
+  // 3. the openai/mcp-ui style global, used by some hosts
+  if (window.openai && window.openai.toolOutput) paint(window.openai.toolOutput);
+</script>
+"""
+
+
+@mcp.resource(SCORES_WIDGET_URI, mime_type="text/html;profile=mcp-app")
+def scores_widget() -> str:
+    """Inline score bars for a run. Rendered by clients that support MCP Apps."""
+    return _SCORES_HTML
+
+
+def _widget_meta() -> dict:
+    """The _meta hint that tells a client this tool has a UI. Clients without
+    MCP Apps ignore it, so attaching it costs nothing."""
+    return {"ui": {"resourceUri": SCORES_WIDGET_URI, "preferredSize": {"height": 240}}}
+
+
 def _dashboard_home(view: str = "") -> str:
     """Link to the dashboard itself (no particular run), e.g. the runs list."""
     base = os.environ.get("RETRIEVAL_DASHBOARD_URL", "").rstrip("/")
@@ -265,7 +370,7 @@ def author_metric(name: str, criteria: str, examples: Optional[List[str]] = None
             "usage": f"pass metrics=['{name}'] to run_eval / evaluate_case"}
 
 
-@mcp.tool()
+@mcp.tool(meta=_widget_meta())
 def run_eval(metrics: List[str], golden_set: str = "", cases: str = "",
              threshold: float = 0.7,
              outputs: Optional[List[str]] = None, label: str = "",
