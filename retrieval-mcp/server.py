@@ -197,23 +197,40 @@ _SCORES_HTML = """<!doctype html>
 </style>
 <div id="root">Loading…</div>
 <script>
-  // The host hands the tool result to the widget. Different hosts have used
-  // slightly different channels while this extension settles, so accept all
-  // three rather than betting on one.
-  function paint(data) {
-    if (!data) return;
-    var agg = data.aggregate || {};
-    var thr = typeof data.threshold === "number" ? data.threshold : 0.7;
-    var names = Object.keys(agg);
-    if (!names.length) { document.getElementById("root").textContent = "No scores."; return; }
+  // Hosts deliver the tool result in different ways and at different times, so
+  // rather than betting on one channel, poll every known source until one
+  // yields data. ChatGPT's Apps SDK sets window.openai.toolOutput and fires
+  // openai:set_globals; other hosts inject window.mcpData or postMessage. A
+  // widget that listens for only one of those sits on "Loading..." forever.
+  var painted = false;
 
+  function source() {
+    if (window.openai && window.openai.toolOutput) return window.openai.toolOutput;
+    if (window.mcpData) return window.mcpData;
+    if (window.toolOutput) return window.toolOutput;
+    return null;
+  }
+
+  function paint(data) {
+    if (painted || !data) return;
+    if (typeof data === "string") { try { data = JSON.parse(data); } catch (e) { return; } }
+    // some hosts wrap the payload
+    if (data.structuredContent) data = data.structuredContent;
+    if (data.result && data.result.structuredContent) data = data.result.structuredContent;
+
+    var agg = data.aggregate || {};
+    var names = Object.keys(agg);
+    if (!names.length) return;
+    painted = true;
+
+    var thr = typeof data.threshold === "number" ? data.threshold : 0.7;
     var failing = names.filter(function (m) {
       var v = (agg[m] || {}).mean_score; return v == null || v < thr;
     }).length;
-
     var n = data.total_cases != null ? data.total_cases : data.cases;
+
     var html = '<div class="hd">' + names.length + " metric" + (names.length === 1 ? "" : "s")
-      + " on " + (n == null ? "?" : n) + " case" + (n === 1 ? "" : "s")
+      + (n == null ? "" : " on " + n + " case" + (n === 1 ? "" : "s"))
       + (failing ? " \u00b7 " + failing + " failing" : " \u00b7 all pass") + "</div>";
 
     names.forEach(function (m) {
@@ -236,17 +253,35 @@ _SCORES_HTML = """<!doctype html>
     document.getElementById("root").innerHTML = html;
   }
 
-  // 1. injected directly on the window by the host
-  if (window.mcpData) paint(window.mcpData);
+  function tryPaint() { paint(source()); }
 
-  // 2. postMessage from the host frame
+  // every channel, plus a short poll for hosts that populate the global late
+  tryPaint();
   window.addEventListener("message", function (e) {
     var d = e.data || {};
-    paint(d.mcpData || d.data || (d.result && d.result.structuredContent) || d.structuredContent);
+    paint(d.mcpData || d.toolOutput || d.data || d);
   });
+  window.addEventListener("openai:set_globals", tryPaint);
+  document.addEventListener("DOMContentLoaded", tryPaint);
 
-  // 3. the openai/mcp-ui style global, used by some hosts
-  if (window.openai && window.openai.toolOutput) paint(window.openai.toolOutput);
+  var tries = 0;
+  var poll = setInterval(function () {
+    tryPaint();
+    if (painted || ++tries > 40) {
+      clearInterval(poll);
+      // Say what actually arrived instead of spinning forever: a widget stuck on
+      // "Loading..." tells you nothing about which channel the host used.
+      if (!painted) {
+        var keys = [];
+        if (window.openai) keys.push("window.openai(" + Object.keys(window.openai).join(",") + ")");
+        if (window.mcpData) keys.push("window.mcpData");
+        if (window.toolOutput) keys.push("window.toolOutput");
+        document.getElementById("root").innerHTML =
+          '<div class="hd">No tool result reached this widget.</div>'
+          + '<div class="ft">available: ' + (keys.length ? keys.join(" \u00b7 ") : "nothing") + "</div>";
+      }
+    }
+  }, 250);
 </script>
 """
 
