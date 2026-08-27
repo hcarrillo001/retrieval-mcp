@@ -43,6 +43,9 @@
   .dist a code{font-family:var(--mono);font-size:11.5px;color:var(--muted);}
   .dist .stat-pill{display:inline-flex;align-items:center;gap:7px;padding:7px 13px;border-radius:999px;
     border:1px solid var(--pass);background:var(--pass-soft);font-size:12.5px;color:var(--pass-ink);}
+  .dist a.stat-pill{text-decoration:none;transition:background .15s,border-color .15s;}
+  .dist a.stat-pill:hover{background:var(--pass);color:#fff;}
+  .dist a.stat-pill:hover code,.dist a.stat-pill:hover .tick{color:#fff;opacity:.9;}
   .dist .stat-pill code{font-family:var(--mono);font-size:11.5px;color:var(--pass-ink);opacity:.75;}
   .dist .tick{color:var(--pass);font-weight:700;}
   @media(max-width:640px){.dist a code{display:none;}}
@@ -313,10 +316,10 @@
 
 <header class="hero"><div class="wrap">
   <div class="dist">
-    <span class="stat-pill">
+    <a class="stat-pill" href="https://registry.modelcontextprotocol.io/?q=io.github.hcarrillo001" target="_blank" rel="noopener">
       <span class="tick">&check;</span> On the official MCP Registry
       <code>io.github.hcarrillo001/retrieval-mcp</code>
-    </span>
+    </a>
     <a href="https://github.com/hcarrillo001/retrieval-mcp/pkgs/container/retrieval-mcp" target="_blank" rel="noopener">
       <svg viewBox="0 0 24 24" fill="none"><path d="M3 9h18v7a2 2 0 01-2 2H5a2 2 0 01-2-2V9zM7 9V6h4v3M13 9V4h4v5" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
       Docker image <code>ghcr.io/hcarrillo001/retrieval-mcp</code>
