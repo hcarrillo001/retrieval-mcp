@@ -168,7 +168,7 @@ def _dashboard_link(run_id: str) -> str:
 # iframe with no network.
 # ---------------------------------------------------------------------------
 
-SCORES_WIDGET_URI = "ui://retrieval-mcp/scores"
+SCORES_WIDGET_URI = "ui://retrieval-mcp/scores/v2"
 
 _SCORES_HTML = """<!doctype html>
 <meta charset="utf-8">
