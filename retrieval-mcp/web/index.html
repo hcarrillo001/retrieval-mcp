@@ -33,6 +33,24 @@
   .navlinks a.cta{background:var(--blue);color:#fff;}
   @media(max-width:640px){.navlinks a.hideSm{display:none;}}
 
+  /* Cursor setup: numbered steps beside the demo video */
+  .demorow{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start;}
+  .setup{border:1px solid var(--line);border-radius:14px;background:var(--card);padding:18px 20px;}
+  .setup h3{font-size:15px;margin:0 0 4px;}
+  .setup .why{font-size:12.5px;color:var(--muted);margin:0 0 16px;}
+  .step{display:grid;grid-template-columns:24px 1fr;gap:11px;margin-bottom:15px;}
+  .step .n{width:22px;height:22px;border-radius:50%;background:var(--blue-soft);color:var(--blue);
+    font-family:var(--mono);font-size:11px;font-weight:700;display:flex;align-items:center;
+    justify-content:center;margin-top:1px;}
+  .step .t{font-size:13px;line-height:1.55;}
+  .step .t b{font-weight:600;}
+  .step pre{margin-top:8px;font-size:11.5px;padding:11px 13px;}
+  .step code.inl{font-family:var(--mono);font-size:12px;background:var(--soft);
+    padding:1px 5px;border-radius:4px;}
+  .setup .note{font-size:12px;color:var(--muted);border-top:1px solid var(--line);
+    padding-top:13px;margin-top:4px;}
+  @media(max-width:900px){.demorow{grid-template-columns:1fr;}}
+
   /* distribution links: registry + image + source, right at the top */
   .dist{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;}
   .dist a{display:inline-flex;align-items:center;gap:7px;padding:7px 13px;border-radius:999px;
@@ -442,7 +460,7 @@
 
 <section id="quickstart"><div class="wrap">
   <h2>Quickstart</h2>
-  <p class="lead">Self-hosted. Clone it, point it at a judge, run it &mdash; your data never leaves your machine.</p>
+  <p class="lead">Self-hosted. Clone it, point it at a judge, run it. Your data never leaves your machine.</p>
   <div class="twocol">
     <div>
       <div class="colh">Install &amp; run</div>
@@ -454,13 +472,13 @@ python server.py">copy</button>git clone https://github.com/hcarrillo001/retriev
 cd retrieval-mcp
 pip install -r requirements.txt
 
-<span class="c"># pick a judge &mdash; or use a local one, below</span>
+<span class="c"># pick a judge, or use a local one below</span>
 export ANTHROPIC_API_KEY=sk-ant-...
 python server.py</pre>
     </div>
     <div>
       <div class="colh">Then just ask</div>
-      <pre><button class="copy" data-c="Score these cases with faithfulness and answer_relevancy: [{&quot;input&quot;:&quot;...&quot;,&quot;actual_output&quot;:&quot;...&quot;,&quot;retrieval_context&quot;:[&quot;...&quot;]}]">copy</button><span class="c"># in the chat &mdash; paste your cases inline</span>
+      <pre><button class="copy" data-c="Score these cases with faithfulness and answer_relevancy: [{&quot;input&quot;:&quot;...&quot;,&quot;actual_output&quot;:&quot;...&quot;,&quot;retrieval_context&quot;:[&quot;...&quot;]}]">copy</button><span class="c"># in the chat: paste your cases inline</span>
 "Score these cases with faithfulness:
  [{"input": "...",
    "actual_output": "...",
@@ -474,8 +492,9 @@ python server.py</pre>
 
 <section id="demos"><div class="wrap">
   <h2>See it in action</h2>
-  <p class="lead">A full walkthrough: connecting the connector, scoring a RAG answer, and reading the result.</p>
-  <div class="feat" style="padding:0;overflow:hidden;max-width:760px">
+  <p class="lead">A full walkthrough, plus the three steps to run it yourself in Cursor.</p>
+  <div class="demorow">
+  <div class="feat" style="padding:0;overflow:hidden">
     <div style="position:relative;width:100%;aspect-ratio:16/9;background:#000">
       <iframe src="https://www.youtube-nocookie.com/embed/zpXiv9isDmg"
               title="retriEVAL: connecting the MCP connector and running an eval"
@@ -489,7 +508,90 @@ python server.py</pre>
       <div style="font-size:12.5px;color:var(--muted);margin-top:3px">Add the connector, load a golden set, score it, and open the run in the dashboard.</div>
     </div>
   </div>
-  <p class="lead" style="margin-top:16px;font-size:13.5px">Prefer to try it yourself? <a href="#try" style="color:var(--blue)">Run a live eval in the sandbox</a> &mdash; no signup.</p>
+
+  <div class="setup">
+    <h3>Cursor setup</h3>
+    <p class="why">Copy, paste, run. About two minutes, and you need
+      <a href="https://www.docker.com/products/docker-desktop/" target="_blank" rel="noopener" style="color:var(--blue)">Docker Desktop</a>
+      plus a judge key (an Anthropic key here, or skip it and run a local
+      model, see below).</p>
+
+    <div class="step">
+      <span class="n">1</span>
+      <div class="t">
+        <b>Start Docker Desktop</b> and wait for the whale icon to stop animating.
+        Nothing to download: the first run pulls the image for you. Docker has to be
+        running <em>before</em> Cursor starts, or the server won't launch and Cursor
+        won't tell you why.
+      </div>
+    </div>
+
+    <div class="step">
+      <span class="n">2</span>
+      <div class="t">
+        <b>Run this in your terminal.</b> It creates the config Cursor reads:
+        <pre><button class="copy" data-c='mkdir -p ~/.cursor && cat > ~/.cursor/mcp.json &lt;&lt;&apos;EOF&apos;
+{
+  "mcpServers": {
+    "retrieval-mcp": {
+      "command": "docker",
+      "args": ["run", "-i", "--rm", "-e", "ANTHROPIC_API_KEY",
+               "ghcr.io/hcarrillo001/retrieval-mcp:1.0.0"],
+      "env": { "ANTHROPIC_API_KEY": "sk-ant-PUT-YOUR-KEY-HERE" }
+    }
+  }
+}
+EOF'>copy</button>mkdir -p ~/.cursor &amp;&amp; cat &gt; ~/.cursor/mcp.json &lt;&lt;'EOF'
+{
+  "mcpServers": {
+    "retrieval-mcp": {
+      "command": "docker",
+      "args": ["run", "-i", "--rm", "-e", "ANTHROPIC_API_KEY",
+               "ghcr.io/hcarrillo001/retrieval-mcp:1.0.0"],
+      "env": { "ANTHROPIC_API_KEY": "sk-ant-PUT-YOUR-KEY-HERE" }
+    }
+  }
+}
+EOF</pre>
+        <span style="font-size:12px;color:var(--muted);display:block;margin-top:8px;font-weight:400">Already have a <code class="inl">~/.cursor/mcp.json</code>? This overwrites it, so paste the <code class="inl">retrieval-mcp</code> block into your existing file instead.</span>
+      </div>
+    </div>
+
+    <div class="step">
+      <span class="n">3</span>
+      <div class="t">
+        <b>Put your key in and check it parsed:</b>
+        <pre><button class="copy" data-c='open -a Cursor ~/.cursor/mcp.json
+python3 -c "import json;json.load(open(__import__(&apos;os&apos;).path.expanduser(&apos;~/.cursor/mcp.json&apos;)));print(&apos;valid json&apos;)"'>copy</button>open -a Cursor ~/.cursor/mcp.json
+
+<span class="c"># replace sk-ant-PUT-YOUR-KEY-HERE, save, then:</span>
+python3 -c "import json;json.load(open('$HOME/.cursor/mcp.json'));print('valid json')"</pre>
+      </div>
+    </div>
+
+    <div class="step">
+      <span class="n">4</span>
+      <div class="t">
+        <b>Restart Cursor</b>, open Settings &rarr; Customize, and look for
+        <code class="inl">retrieval-mcp</code> with a green dot and <b>14 tools enabled</b>.
+        Then paste this into the chat:
+        <pre><button class="copy" data-c='Score this with faithfulness: input "What colour is the Golden Gate Bridge?", output "It is painted International Orange.", retrieval context ["The Golden Gate Bridge is painted International Orange."]'>copy</button><span class="c"># in the Cursor chat: expect 1.00, all claims supported</span>
+Score this with faithfulness:
+ input "What colour is the Golden Gate Bridge?",
+ output "It is painted International Orange.",
+ retrieval context ["The Golden Gate Bridge is
+  painted International Orange."]</pre>
+      </div>
+    </div>
+
+    <p class="note"><b>No green dot?</b> Docker wasn't running when Cursor started. Start
+      it and restart Cursor. <b>Want to keep everything local?</b> Add
+      <code class="inl">"RETRIEVAL_JUDGE_BACKEND": "ollama"</code> to the
+      <code class="inl">env</code> block, drop the API key, and no data leaves your machine.
+      Runs are written inside the container, never to a hosted database.</p>
+  </div>
+  </div>
+  <p class="lead" style="margin-top:16px;font-size:13.5px">Prefer to try it yourself? <a href="#try" style="color:var(--blue)">Run a live eval in the sandbox</a>. No signup.</p>
 </div></section>
 
 <section id="compare"><div class="wrap">
