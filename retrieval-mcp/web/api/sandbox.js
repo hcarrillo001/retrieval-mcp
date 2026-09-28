@@ -284,7 +284,12 @@ export default async function handler(req, res) {
     // Prefer the server's own list — it knows what is really configured.
     if (serverUrl) {
       try {
-        const r = await fetch(`${serverUrl.replace(/\/$/, "")}/sandbox/models`, {
+        // RETRIEVAL_SANDBOX_URL points at the /sandbox route itself, so the
+        // list lives beside it: strip a trailing /sandbox before adding
+        // /sandbox/models (it used to request /sandbox/sandbox/models, get a
+        // 404, and silently fall back to the Groq-only list below)
+        const base = serverUrl.replace(/\/+$/, "").replace(/\/sandbox$/, "");
+        const r = await fetch(`${base}/sandbox/models`, {
           headers: secret ? { "X-Sandbox-Secret": secret } : {},
         });
         if (r.ok) return res.status(200).json(await r.json());
