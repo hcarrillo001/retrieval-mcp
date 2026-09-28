@@ -692,13 +692,17 @@ def _summary_md(aggregate: dict, threshold: float, n_cases: int, link: str,
                     return "bad", p
                 return ("mid" if c.get("verdict") == "says_nothing" or p < 0.7 else "ok"), p
             flagged = sorted([(c, *tone(c)) for c in claims if tone(c)[0] != "ok"], key=lambda x: x[2])
+            jev = (sc.get("details") or {}).get("judge") == "jev"
             for c, t, p in flagged[:8]:
                 text = M._clip(one(c["claim"]), 110)
+                # Jev: its probability; an LLM judge: its one-line reason
+                num = f"{f2(p)}  " if jev else ""
+                reason = f"  → {M._clip(one(c['why']), 90)}" if (not jev and c.get("why")) else ""
                 if t == "bad":
-                    lines.append(f"- ✕ {f2(p)}  {text}")
+                    lines.append(f"- ✕ {num}{text}{reason}")
                 else:
-                    why = "not in context" if c.get("verdict") == "says_nothing" else "weak support"
-                    lines.append(f"  ! {f2(p)}  {text} ({why})")
+                    tag = "not in context" if c.get("verdict") == "says_nothing" else "weak support"
+                    lines.append(f"  ! {num}{text} ({tag}){reason}")
             if len(flagged) > 8:
                 lines.append(f"  … {len(flagged) - 8} more in the full report")
             good = len(claims) - len(flagged)

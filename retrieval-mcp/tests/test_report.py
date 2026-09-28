@@ -32,7 +32,7 @@ def test_explain_single_case_lists_the_bad_claims():
     claims = [{"claim": "Fare booked on the airline site is expensed.", "p": 0.04, "bad": True},
               {"claim": "Economy class.", "p": 0.93, "bad": False},
               {"claim": "Booked in the portal.", "p": 0.95, "bad": False}]
-    v = M.explain("faithfulness", [_row(0, "q", 0.67, "r", {"claims": claims, "kind": "support"})], 0.7)
+    v = M.explain("faithfulness", [_row(0, "q", 0.67, "r", {"judge": "jev", "claims": claims, "kind": "support"})], 0.7)
     assert v["status"] == "fail"
     assert v["drivers"][0] == "1 of 3 claims are not supported by the context. Each one lowers the score:"
     assert "p=0.04" in v["drivers"][1]
@@ -111,7 +111,7 @@ def test_explain_rounds_like_the_page_and_names_p_contradicts():
     v = M.explain("faithfulness", [_row(0, "q", 0.625, "r")], 0.7)
     assert "averaged 0.63" in v["headline"]          # the page shows 0.63 too
     claims = [{"claim": "x", "p": 0.0, "bad": True, "verdict": "contradicts"}]
-    v = M.explain("hallucination", [_row(0, "q", 0.0, "r", {"claims": claims, "kind": "contradiction"},
+    v = M.explain("hallucination", [_row(0, "q", 0.0, "r", {"judge": "jev", "claims": claims, "kind": "contradiction"},
                                          "hallucination")], 0.7)
     assert "(P(contradicts)=1.00)" in v["drivers"][1]
 
@@ -122,7 +122,7 @@ def test_summary_card_single_case_with_claims():
               {"claim": "Iffy one.", "p": 0.59, "bad": False, "label": "supported"},
               {"claim": "Silent one.", "p": 1.0, "bad": False, "verdict": "says_nothing"},
               {"claim": "Good one.", "p": 0.97, "bad": False, "label": "supported"}]
-    rows = [_row(0, "q", 0.67, "r", {"claims": claims, "kind": "support"})]
+    rows = [_row(0, "q", 0.67, "r", {"judge": "jev", "claims": claims, "kind": "support"})]
     agg = {"faithfulness": {"mean_score": 0.67, "verdict": M.explain("faithfulness", rows, 0.7)}}
     md = server._summary_md(agg, 0.7, 1, "", "https://x/report?run=1", rows)
     body = md.split("```diff\n", 1)[1].split("\n```", 1)[0].splitlines()
@@ -131,3 +131,56 @@ def test_summary_card_single_case_with_claims():
                         "  ! 0.59  Iffy one. (weak support)",
                         "  ! 1.00  Silent one. (not in context)",
                         "+ ✓ 1 other claim supported by the context"]
+
+
+# ---- the LLM judge lists every claim too ------------------------------------
+
+def test_llm_faithfulness_breakdown():
+    ans = "It has a 1,280 m main span. It opened in 1937."
+    reply = {"reasoning": "One claim is not in the context.", "score": 0.9,  # its own arithmetic is ignored
+             "claims": [{"claim": "The span is 1,280 m.", "quote": "It has a 1,280 m main span.", "supported": True},
+                        {"claim": "It opened in 1937.", "quote": "IT OPENED IN 1937", "supported": False,
+                         "why": "The context never mentions when it opened."}]}
+    r = M.faithfulness({"actual_output": ans, "retrieval_context": ["main span of 1,280 metres"]},
+                       lambda s, u, *a: reply)
+    d = r["details"]
+    assert r["score"] == 0.5 and d["judge"] == "llm" and d["kind"] == "support"
+    assert d["claims"][1] == {"claim": "It opened in 1937.", "quote": "It opened in 1937",
+                              "why": "The context never mentions when it opened.",
+                              "supported": False, "bad": True, "p": 0.0, "label": "unsupported"}
+    assert d["unsupported_claims"] == ["It opened in 1937."]
+
+
+def test_llm_faithfulness_old_style_reply_still_works():
+    r = M.faithfulness({"actual_output": "a", "retrieval_context": ["c"]},
+                       lambda s, u, *a: {"score": 0.4, "reasoning": "r", "unsupported_claims": ["a"]})
+    assert r["score"] == 0.4 and r["details"]["unsupported_claims"] == ["a"] and "claims" not in r["details"]
+
+
+def test_llm_hallucination_breakdown_matches_jev_definition():
+    reply = {"reasoning": "r", "claims": [
+        {"claim": "A", "quote": "A", "verdict": "supports"},
+        {"claim": "B", "quote": "B", "verdict": "contradicts", "why": "The context says not B."},
+        {"claim": "C", "quote": "C", "verdict": "says nothing", "why": "Not mentioned."}]}
+    r = M.hallucination({"actual_output": "A. B. C.", "context": ["x"]}, lambda s, u, *a: reply)
+    d = r["details"]
+    assert round(r["score"], 4) == round(2 / 3, 4)            # only the contradiction counts
+    assert [c["label"] for c in d["claims"]] == ["supported", "contradicts", "not in context"]
+    assert d["contradictions"] == ["B"] and d["not_in_context"] == 1
+
+
+def test_chat_card_shows_llm_reasons_not_probabilities():
+    import server
+    claims = [{"claim": "Opened in 1937.", "p": 0.0, "bad": True, "label": "unsupported",
+               "why": "Not in the context."},
+              {"claim": "Span 1,280 m.", "p": 1.0, "bad": False, "label": "supported"}]
+    rows = [_row(0, "q", 0.5, "r", {"judge": "llm", "claims": claims, "kind": "support"})]
+    md = server._summary_md({"faithfulness": {"mean_score": 0.5}}, 0.7, 1, "", "", rows)
+    assert "- ✕ Opened in 1937.  → Not in the context." in md
+
+
+def test_explain_llm_claims_show_reasons_not_p():
+    claims = [{"claim": "Opened in 1937.", "p": 0.0, "bad": True, "why": "Not in the context."},
+              {"claim": "Span 1,280 m.", "p": 1.0, "bad": False}]
+    v = M.explain("faithfulness", [_row(0, "q", 0.5, "r", {"judge": "llm", "claims": claims, "kind": "support"})], 0.7)
+    assert v["drivers"][1] == "“Opened in 1937.”: Not in the context."

@@ -32,7 +32,7 @@
   function normRow(r) {
     var p = r.p != null ? r.p : r.p_supported, bad = r.bad != null ? r.bad : !r.supported;
     var t = bad ? "bad" : ((r.verdict === "says_nothing" || p < 0.7) ? "mid" : "ok");
-    return { claim: r.claim, quote: r.quote, p: p, t: t, label: r.label || (bad ? "unsupported" : "supported") };
+    return { claim: r.claim, quote: r.quote, p: p, t: t, why: r.why || "", label: r.label || (bad ? "unsupported" : "supported") };
   }
 
   function chips(d) {
@@ -41,7 +41,7 @@
     Object.keys(d).forEach(function (k) {
       var v = d[k];
       if (skip[k]) return;
-      if (d.judge === "jev" && (k === "unsupported_claims" || k === "contradictions" || k === "level_score" || k === "top_level")) return;
+      if ((d.judge === "jev" || d.claims) && (k === "unsupported_claims" || k === "contradictions" || k === "level_score" || k === "top_level")) return;
       var name = esc(k.replace(/_/g, " "));
       if (Array.isArray(v)) {
         if (!v.length) return;
@@ -55,18 +55,25 @@
   function claimTable(d) {
     var claims = (d || {}).claims;
     if (!Array.isArray(claims) || !claims.length) return "";
-    var rows = claims.map(normRow).sort(function (a, b) { return a.p - b.p; });
+    // worst first: failing, then borderline / not in context, then supported
+    var rank = { bad: 0, mid: 1, ok: 2 };
+    var rows = claims.map(normRow).sort(function (a, b) { return (rank[a.t] - rank[b.t]) || (a.p - b.p); });
     var n = { ok: 0, mid: 0, bad: 0 };
     rows.forEach(function (r) { n[r.t]++; });
-    var contra = d.kind === "contradiction";
+    var contra = d.kind === "contradiction", jev = d.judge === "jev";
+    // Jev gives a probability per claim; an LLM judge gives a verdict and, for
+    // each failing claim, a one-line reason
+    var mark = function (r) { return r.t === "ok" ? "✓" : (r.t === "bad" ? "✕" : "!"); };
     var row = function (r) {
-      return '<div class="rr-cl t-' + r.t + '"><span class="p">' + fm(r.p) + '</span><span class="c">' + esc(r.claim) + "</span>" +
+      return '<div class="rr-cl t-' + r.t + (jev ? "" : " llm") + '"><span class="p">' + (jev ? fm(r.p) : mark(r)) + "</span>" +
+        '<span class="c">' + esc(r.claim) + (r.why && r.t !== "ok" ? '<span class="why">' + esc(r.why) + "</span>" : "") + "</span>" +
         '<span class="bar"><span style="width:' + Math.max(3, Math.round(r.p * 100)) + '%"></span></span>' +
         '<span class="st">' + esc(r.label) + "</span></div>";
     };
     var first = rows.slice(0, 13), rest = rows.slice(13);
-    return '<div class="rr-claims"><div class="hd"><b>Claims</b><span class="what">Jev’s probability that the context ' +
-      (contra ? "does not contradict" : "supports") + " each claim, lowest first</span><span class=\"sp\"></span>" +
+    var what = jev ? "Jev’s probability that the context " + (contra ? "does not contradict" : "supports") + " each claim, lowest first"
+      : "The judge’s verdict on each claim, with a reason for every one that fails";
+    return '<div class="rr-claims"><div class="hd"><b>Claims</b><span class="what">' + what + "</span><span class=\"sp\"></span>" +
       (n.bad ? '<span class="key"><i class="k-bad"></i>' + (contra ? "contradicts" : "unsupported") + " " + n.bad + "</span>" : "") +
       (n.mid ? '<span class="key"><i class="k-mid"></i>' + (contra ? "not in context" : "weak") + " " + n.mid + "</span>" : "") +
       '<span class="key"><i class="k-ok"></i>supported ' + n.ok + "</span></div>" +
@@ -220,7 +227,11 @@
       if (claims.length) {
         var bad = claims.filter(function (c) { return c.t !== "ok"; }).sort(function (x, y) { return x.p - y.p; });
         // the cross already says "unsupported"; spell out only the yellow cases
-        bad.slice(0, MAX).forEach(function (c) { rows.push(row(c.t === "bad" ? "\u2715" : "!", c.t, c.claim, c.t === "mid" ? c.label : "", fm(c.p))); });
+        // Jev: its probability; an LLM judge: its one-line reason instead
+        var jevRows = d.judge === "jev";
+        bad.slice(0, MAX).forEach(function (c) {
+          rows.push(row(c.t === "bad" ? "\u2715" : "!", c.t, c.claim, c.why || (c.t === "mid" ? c.label : ""), jevRows ? fm(c.p) : ""));
+        });
         if (bad.length > MAX) rows.push('<div class="rr-cb-more">+' + (bad.length - MAX) + " more in the full report</div>");
         var good = claims.length - bad.length;
         if (good) rows.push(row("\u2713", "ok", good + " other claim" + (good === 1 ? "" : "s") + " supported by the context", "", ""));

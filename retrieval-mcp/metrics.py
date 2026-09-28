@@ -57,21 +57,65 @@ ANSWER:
     return _result("answer_relevancy", r["score"], threshold, r.get("reasoning", ""))
 
 
+# The LLM judge lists every claim too, so its report has the same claim table
+# and highlighting as Jev's. Each claim carries the exact quote from the answer
+# (for highlighting) and, when it fails, a one-line reason: that reason is what
+# an LLM judge adds over Jev. Asking for it makes the LLM write more, so it is a
+# little slower; the budget below leaves room for long answers.
+_LLM_CLAIMS_MAX_TOKENS = 4096
+
+
+def _llm_claim_rows(raw, answer: str, verdict_key: str = "supported"):
+    """Normalise the judge's claims into the display rows the report uses
+    (claim, quote, p, bad, label, why), the same shape as Jev rows."""
+    rows = []
+    for c in raw or []:
+        if not isinstance(c, dict) or not str(c.get("claim", "")).strip():
+            continue
+        row = {"claim": str(c["claim"]).strip(), "quote": _locate(c.get("quote"), answer),
+               "why": str(c.get("why") or "").strip()}
+        if verdict_key == "verdict":
+            v = str(c.get("verdict") or "").strip().lower().replace(" ", "_")
+            v = v if v in ("supports", "contradicts", "says_nothing") else "says_nothing"
+            row.update(verdict=v, bad=v == "contradicts", p=0.0 if v == "contradicts" else 1.0,
+                       label=_VERDICT_LABEL[v])
+        else:
+            ok = bool(c.get("supported"))
+            row.update(supported=ok, bad=not ok, p=1.0 if ok else 0.0,
+                       label="supported" if ok else "unsupported")
+        rows.append(row)
+    return rows
+
+
 def faithfulness(case: dict, jj: JudgeJSON, threshold: float = 0.7) -> dict:
     """Are the answer's claims supported by the retrieved context? (RAG groundedness)"""
     ctx = "\n- ".join(case.get("retrieval_context", []) or case.get("context", []))
+    answer = case.get("actual_output", "") or ""
     user = f"""Extract the factual claims in the ANSWER, then check each against the CONTEXT.
 A claim is supported only if the context states or directly implies it.
+For every claim give: "claim" (standalone), "quote" (the shortest passage copied
+EXACTLY from the ANSWER that states it), "supported" (true/false) and, only when
+unsupported, "why" (one short sentence naming what the context says instead, or
+that it says nothing about it).
 score = supported_claims / total_claims (1.0 if no claims).
-Return JSON: {{"reasoning": str, "total_claims": int, "supported_claims": int,
-"unsupported_claims": [str], "score": 0.0-1.0}}
+Return JSON: {{"reasoning": str, "claims": [{{"claim": str, "quote": str, "supported": bool, "why": str}}],
+"total_claims": int, "supported_claims": int, "unsupported_claims": [str], "score": 0.0-1.0}}
 
 CONTEXT:
 - {ctx}
 
 ANSWER:
-{case.get('actual_output','')}"""
-    r = jj(_SYS, user)
+{answer}"""
+    r = jj(_SYS, user, _LLM_CLAIMS_MAX_TOKENS)
+    rows = _llm_claim_rows(r.get("claims"), answer)
+    if rows:
+        # score from the listed claims, so the number always matches the table
+        n_sup = sum(1 for x in rows if not x["bad"])
+        return _result(
+            "faithfulness", n_sup / len(rows), threshold, r.get("reasoning", ""),
+            {"judge": "llm", "kind": "support", "claims": rows,
+             "total_claims": len(rows), "supported_claims": n_sup,
+             "unsupported_claims": [x["claim"] for x in rows if x["bad"]]})
     return _result(
         "faithfulness", r["score"], threshold, r.get("reasoning", ""),
         {"unsupported_claims": r.get("unsupported_claims", []),
@@ -81,18 +125,37 @@ ANSWER:
 
 
 def hallucination(case: dict, jj: JudgeJSON, threshold: float = 0.7) -> dict:
-    """Fraction of context the answer does NOT contradict. Higher = less hallucination."""
+    """Share of the answer's claims that do NOT contradict the context.
+    Higher = less hallucination. A claim the context says nothing about is
+    reported as "not in context" but not counted here (faithfulness counts
+    those), the same definition the Jev judge uses."""
     ctx = "\n- ".join(case.get("context", []) or case.get("retrieval_context", []))
-    user = f"""Check whether the ANSWER contradicts the CONTEXT (states something the context refutes or that is unsupported and presented as fact).
-score = 1 - (contradicted_facts / total_facts). 1.0 means fully consistent.
-Return JSON: {{"reasoning": str, "contradictions": [str], "score": 0.0-1.0}}
+    answer = case.get("actual_output", "") or ""
+    user = f"""Extract the factual claims in the ANSWER and classify each against the CONTEXT:
+"supports" (the context states or implies it), "contradicts" (the context states
+the opposite or implies it is false) or "says_nothing" (the context does not address it).
+For every claim give: "claim" (standalone), "quote" (the shortest passage copied
+EXACTLY from the ANSWER that states it), "verdict", and for contradicts or
+says_nothing a short "why".
+score = 1 - (contradicting_claims / total_claims). 1.0 means nothing contradicts the context.
+Return JSON: {{"reasoning": str, "claims": [{{"claim": str, "quote": str, "verdict": "supports"|"contradicts"|"says_nothing", "why": str}}],
+"contradictions": [str], "score": 0.0-1.0}}
 
 CONTEXT:
 - {ctx}
 
 ANSWER:
-{case.get('actual_output','')}"""
-    r = jj(_SYS, user)
+{answer}"""
+    r = jj(_SYS, user, _LLM_CLAIMS_MAX_TOKENS)
+    rows = _llm_claim_rows(r.get("claims"), answer, verdict_key="verdict")
+    if rows:
+        contra = [x for x in rows if x["bad"]]
+        silent = [x for x in rows if x.get("verdict") == "says_nothing"]
+        return _result(
+            "hallucination", 1 - len(contra) / len(rows), threshold, r.get("reasoning", ""),
+            {"judge": "llm", "kind": "contradiction", "claims": rows,
+             "total_claims": len(rows), "contradictions": [x["claim"] for x in contra],
+             "not_in_context": len(silent)})
     return _result(
         "hallucination", r["score"], threshold, r.get("reasoning", ""),
         {"contradictions": r.get("contradictions", [])},
@@ -619,6 +682,11 @@ def explain(metric: str, per_case: list, threshold: float) -> dict:
             drivers.append(f"{len(bad)} of {len(claims)} claims {what}. Each one lowers the score:")
             for c in bad[:4]:
                 p = c.get("p", c.get("p_supported", 0))
+                if d.get("judge") != "jev":
+                    # an LLM judge gives a verdict and a reason, not a probability
+                    why = f": {_clip(str(c['why']), 120)}" if c.get("why") else ""
+                    drivers.append(f"“{_clip(c['claim'], 110)}”{why}")
+                    continue
                 # contradiction rows store P(not contradicted); say what it means
                 shown = (f"P(contradicts)={_f2(1 - p)}" if d.get("kind") == "contradiction"
                          else f"p={_f2(p)}")

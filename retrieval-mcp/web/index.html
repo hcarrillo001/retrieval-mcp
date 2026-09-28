@@ -1174,9 +1174,19 @@ Score this with faithfulness:
     function back(){$("sbResult").innerHTML="";$("sbSetup").classList.remove("sb-hide");}
 
     var lastPayload=null;
+    function scrollToSandbox(){
+      try{
+        var top=$("sbx").getBoundingClientRect().top+window.pageYOffset-80;   // clear the sticky nav
+        if(Math.abs(window.pageYOffset-top)>40)
+          window.scrollTo({top:top,behavior:window.matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth"});
+      }catch(e){}
+    }
     async function runEval(payload){
       lastPayload=payload;
       $("sbSetup").classList.add("sb-hide");$("sbLoading").classList.remove("sb-hide");$("sbResult").innerHTML="";startThink();
+      // the setup panel is tall; once it hides, the loading state sits above the
+      // viewport. Bring it into view so the run is visible without scrolling.
+      scrollToSandbox();
       try{
         var r=await fetch("/api/sandbox",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(payload)});
         var data=await r.json();
@@ -1184,6 +1194,7 @@ Score this with faithfulness:
         if(!r.ok){$("sbResult").innerHTML='<div class="sb-err">'+esc(data.message||data.error||("error "+r.status))+'</div>';
           $("sbSetup").classList.remove("sb-hide");return;}
         render(data);
+        scrollToSandbox();
       }catch(e){stopThink();$("sbLoading").classList.add("sb-hide");$("sbSetup").classList.remove("sb-hide");
         $("sbResult").innerHTML='<div class="sb-err">'+esc(String(e))+'</div>';}
     }
