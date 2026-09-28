@@ -29,7 +29,7 @@ import charts as C
 from judge import (judge_json, budget_status, reset_spend, BudgetExceeded,
                    judge_as, sandbox_models, SANDBOX_PRESETS,
                    jev_enabled, jev_ask, jev_map, judge_label, use_judge,
-                   JEV_METRICS)
+                   JEV_METRICS, jev_split_mode)
 from goldensets import load_records
 
 __version__ = "1.0.0"  # keep in step with server.json and the image tag
@@ -65,6 +65,8 @@ _FIELD_LABEL = {"retrieval_context": "retrieved context", "actual_output": "mode
 def _sandbox_judge_name(model_id: str) -> str:
     p = SANDBOX_PRESETS.get(model_id, {})
     if p.get("kind") == "jev":
+        if jev_split_mode(sandbox=True) == "sentences":
+            return f"{p['model']} \u00b7 sentence split"
         return f"{p['model']} + {SANDBOX_PRESETS[p['decomposer']]['model']}"
     return p.get("model", model_id)
 
@@ -465,7 +467,8 @@ def _run_metric(name: str, case: dict, threshold: float) -> dict:
             f"No score was produced (this is a missing input, not a failing result)."
         )
     if name in M.JEV and jev_enabled():
-        return M.JEV[name](case, judge_json, jev_ask, jev_map, threshold=threshold)
+        return M.JEV[name](case, judge_json, jev_ask, jev_map, threshold=threshold,
+                           split=jev_split_mode())
     if name in M.BUILTIN:
         return M.BUILTIN[name](case, judge_json, threshold=threshold)
     if name in CUSTOM_METRICS:

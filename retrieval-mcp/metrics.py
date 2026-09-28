@@ -339,12 +339,48 @@ def extract_claims(case: dict, jj: JudgeJSON) -> list:
     return [c["claim"] for c in extract_claims_with_quotes(case, jj)]
 
 
+def split_sentences(text: str) -> list:
+    """The fast path: split the answer into sentences in code, no LLM call.
+    Every sentence is its own claim and its own quote. Very short fragments
+    (headings like "What's covered.") are dropped here; the rest of the filler is
+    dropped by Jev itself (the is_claim question asked with each check)."""
+    import re
+    out = []
+    for block in re.split(r"\n+", str(text or "")):
+        for sent in re.split(r'(?<=[.!?])\s+(?=[A-Z0-9"“(\'])', block.strip()):
+            sent = sent.strip()
+            if len(sent.split()) >= 4:
+                out.append({"claim": sent, "quote": sent})
+    return out
+
+
+def _claims_for(case: dict, jj: JudgeJSON, split: str) -> list:
+    return split_sentences(case.get("actual_output", "")) if split == "sentences" \
+        else extract_claims_with_quotes(case, jj)
+
+
+# asked in the SAME Jev call as the check, so it costs no extra time: sentences
+# that state nothing checkable are left out instead of counting as unsupported
+IS_CLAIM = {"type": "noul",
+            "instructions": "The claim states a specific, checkable fact, rather than "
+                            "being a greeting, heading, question, suggestion or filler"}
+
+
+def _state(ctx: list, claim: str, answer: str, split: str) -> dict:
+    st = {"context": "\n".join(ctx), "claim": claim}
+    if split == "sentences":
+        # a raw sentence can say "it" or "your spouse"; the whole answer lets Jev
+        # resolve what it refers to (the LLM splitter used to do that rewriting)
+        st["answer"] = answer
+    return st
+
+
 def _clip(s: str, n: int = 90) -> str:
     return s if len(s) <= n else s[: n - 1] + "…"
 
 
 def faithfulness_jev(case: dict, jj: JudgeJSON, ask, pmap=None,
-                     threshold: float = 0.7) -> dict:
+                     threshold: float = 0.7, split: str = "llm") -> dict:
     """faithfulness = supported claims / total claims, with Jev deciding support.
 
     Same definition as the LLM rubric, so scores are comparable across backends;
@@ -352,7 +388,7 @@ def faithfulness_jev(case: dict, jj: JudgeJSON, ask, pmap=None,
     pmap = pmap or (lambda f, xs: list(map(f, xs)))
     ctx = case.get("retrieval_context") or case.get("context") or []
     ctx = ctx if isinstance(ctx, list) else [ctx]
-    found = extract_claims_with_quotes(case, jj)
+    found = _claims_for(case, jj, split)
     claims = [c["claim"] for c in found]
     if not claims:
         return _result("faithfulness", 1.0, threshold,
@@ -360,19 +396,32 @@ def faithfulness_jev(case: dict, jj: JudgeJSON, ask, pmap=None,
                        {"judge": "jev", "claims": [], "total_claims": 0,
                         "supported_claims": 0, "unsupported_claims": []})
 
-    def check(claim):
-        a = ask({"context": "\n".join(ctx), "claim": claim},
-                {"supported": {"type": "noul",
-                               "instructions": "The claim is directly supported by the context"}})
-        return float(a["supported"]["noul"])
+    answer = case.get("actual_output", "") or ""
+    qs = {"supported": {"type": "noul",
+                        "instructions": "The claim is directly supported by the context"}}
+    if split == "sentences":
+        qs["is_claim"] = IS_CLAIM
 
-    probs = pmap(check, claims)
+    def check(claim):
+        a = ask(_state(ctx, claim, answer, split), qs)
+        is_claim = float(a["is_claim"]["noul"]) if "is_claim" in a else 1.0
+        return float(a["supported"]["noul"]), is_claim
+
+    results = pmap(check, claims)
+    kept = [(f, p) for f, (p, ic) in zip(found, results) if ic >= 0.5]
+    skipped = len(found) - len(kept)
+    if not kept:
+        return _result("faithfulness", 1.0, threshold,
+                       "No factual claims in the answer, so nothing can be unsupported.",
+                       {"judge": "jev", "kind": "support", "split": split, "claims": [],
+                        "total_claims": 0, "supported_claims": 0, "unsupported_claims": [],
+                        "skipped_non_claims": skipped})
     # p / bad / label are the display fields every Jev claim list shares
     rows = [{"claim": f["claim"], "quote": f["quote"], "p_supported": round(p, 4),
              "supported": p >= JEV_SUPPORT_CUTOFF,
              "p": round(p, 4), "bad": p < JEV_SUPPORT_CUTOFF,
              "label": "supported" if p >= JEV_SUPPORT_CUTOFF else "unsupported"}
-            for f, p in zip(found, probs)]
+            for f, p in kept]
     unsupported = [r for r in rows if not r["supported"]]
     n_sup = len(rows) - len(unsupported)
     if unsupported:
@@ -386,9 +435,10 @@ def faithfulness_jev(case: dict, jj: JudgeJSON, ask, pmap=None,
         reason = (f"All {len(rows)} claims are supported by the context (weakest: "
                   f"“{_clip(lo['claim'])}” at p={lo['p_supported']:.2f}).")
     return _result("faithfulness", n_sup / len(rows), threshold, reason,
-                   {"judge": "jev", "kind": "support", "claims": rows,
+                   {"judge": "jev", "kind": "support", "split": split, "claims": rows,
                     "total_claims": len(rows), "supported_claims": n_sup,
-                    "unsupported_claims": [r["claim"] for r in unsupported]})
+                    "unsupported_claims": [r["claim"] for r in unsupported],
+                    **({"skipped_non_claims": skipped} if skipped else {})})
 
 
 HALLUCINATION_CHOICES = {
@@ -401,7 +451,7 @@ _VERDICT_LABEL = {"supports": "supported", "contradicts": "contradicts",
 
 
 def hallucination_jev(case: dict, jj: JudgeJSON, ask, pmap=None,
-                      threshold: float = 0.7) -> dict:
+                      threshold: float = 0.7, split: str = "llm") -> dict:
     """hallucination = 1 - contradicted claims / total claims.
 
     Each claim gets one Jev Choice (supports / contradicts / says nothing), the
@@ -411,25 +461,34 @@ def hallucination_jev(case: dict, jj: JudgeJSON, ask, pmap=None,
     pmap = pmap or (lambda f, xs: list(map(f, xs)))
     ctx = case.get("context") or case.get("retrieval_context") or []
     ctx = ctx if isinstance(ctx, list) else [ctx]
-    found = extract_claims_with_quotes(case, jj)
+    found = _claims_for(case, jj, split)
     if not found:
         return _result("hallucination", 1.0, threshold,
                        "No factual claims in the answer, so nothing can contradict the context.",
                        {"judge": "jev", "kind": "contradiction", "claims": [],
                         "total_claims": 0, "contradictions": []})
 
+    answer = case.get("actual_output", "") or ""
+    qs = {"relation": {"type": "choice",
+                       "instructions": "How does the context relate to the claim?",
+                       "criteria": HALLUCINATION_CHOICES}}
+    if split == "sentences":
+        qs["is_claim"] = IS_CLAIM
+
     def check(f):
-        a = ask({"context": "\n".join(ctx), "claim": f["claim"]},
-                {"relation": {"type": "choice",
-                              "instructions": "How does the context relate to the claim?",
-                              "criteria": HALLUCINATION_CHOICES}})["relation"]
+        ans = ask(_state(ctx, f["claim"], answer, split), qs)
+        a = ans["relation"]
         probs = {k: float(v) for k, v in (a.get("probabilities") or {}).items()}
         verdict = a.get("choice") or (max(probs, key=probs.get) if probs else "says_nothing")
-        return verdict, probs, a.get("confidence")
+        is_claim = float(ans["is_claim"]["noul"]) if "is_claim" in ans else 1.0
+        return verdict, probs, a.get("confidence"), is_claim
 
     results = pmap(check, found)
-    rows = []
-    for f, (verdict, probs, conf) in zip(found, results):
+    rows, skipped = [], 0
+    for f, (verdict, probs, conf, is_claim) in zip(found, results):
+        if is_claim < 0.5:
+            skipped += 1
+            continue
         p_contra = probs.get("contradicts", 1.0 if verdict == "contradicts" else 0.0)
         rows.append({"claim": f["claim"], "quote": f["quote"], "verdict": verdict,
                      "probabilities": probs, "confidence": conf,
@@ -437,6 +496,11 @@ def hallucination_jev(case: dict, jj: JudgeJSON, ask, pmap=None,
                      # is better in every Jev claim list
                      "p": round(1 - p_contra, 4), "bad": verdict == "contradicts",
                      "label": _VERDICT_LABEL.get(verdict, verdict)})
+    if not rows:
+        return _result("hallucination", 1.0, threshold,
+                       "No factual claims in the answer, so nothing can contradict the context.",
+                       {"judge": "jev", "kind": "contradiction", "split": split, "claims": [],
+                        "total_claims": 0, "contradictions": [], "skipped_non_claims": skipped})
     contra = [r for r in rows if r["bad"]]
     silent = [r for r in rows if r["verdict"] == "says_nothing"]
     if contra:
@@ -449,14 +513,15 @@ def hallucination_jev(case: dict, jj: JudgeJSON, ask, pmap=None,
         reason += (f" {len(silent)} more are not in the context at all "
                    f"(not counted here; faithfulness scores those).")
     return _result("hallucination", 1 - len(contra) / len(rows), threshold, reason,
-                   {"judge": "jev", "kind": "contradiction", "claims": rows,
+                   {"judge": "jev", "kind": "contradiction", "split": split, "claims": rows,
                     "total_claims": len(rows),
+                    **({"skipped_non_claims": skipped} if skipped else {}),
                     "contradictions": [r["claim"] for r in contra],
                     "not_in_context": len(silent)})
 
 
 def answer_relevancy_jev(case: dict, jj: JudgeJSON, ask, pmap=None,
-                         threshold: float = 0.7) -> dict:
+                         threshold: float = 0.7, split: str = "llm") -> dict:
     """Relevancy as a Jev Score on a 5-level rubric, normalised to 0-1.
     Jev's score is the probability-weighted level (0..4), so it is already
     continuous; dividing by the top level puts it on the usual scale. No LLM call."""
@@ -507,6 +572,13 @@ BUILTIN = {
 # the MCP widget and the text Claude reads all show this same verdict.
 # ---------------------------------------------------------------------------
 
+def _f2(x: float) -> str:
+    """Two decimals, rounding half up like the page's toFixed (Python's own
+    formatting rounds 0.625 to 0.62 while the page showed 0.63)."""
+    import math
+    return f"{math.floor(float(x) * 100 + 0.5 + 1e-9) / 100:.2f}"
+
+
 def explain(metric: str, per_case: list, threshold: float) -> dict:
     """per_case: rows as saved by run_eval / the sandbox, each with
     {"index", "input", "scores": {metric: {"score", "success", "reason", "details"}}}.
@@ -519,8 +591,8 @@ def explain(metric: str, per_case: list, threshold: float) -> dict:
     mean = sum(scores) / len(scores)
     ok = mean >= threshold
     cmp = "at or above" if ok else "below"
-    headline = (f"{'Passes' if ok else 'Fails'}: {metric} averaged {mean:.2f}, "
-                f"{cmp} the {threshold:.2f} threshold")
+    headline = (f"{'Passes' if ok else 'Fails'}: {metric} averaged {_f2(mean)}, "
+                f"{cmp} the {_f2(threshold)} threshold")
     failing = sorted([(r, s) for r, s in rows if s["score"] < threshold],
                      key=lambda rs: rs[1]["score"])
     drivers = []
@@ -528,10 +600,10 @@ def explain(metric: str, per_case: list, threshold: float) -> dict:
         headline += f" ({len(rows) - len(failing)} of {len(rows)} cases pass)."
         for r, s in failing[:3]:
             q = _clip(str(r.get("input") or f"case {r.get('index', 0) + 1}"), 70)
-            drivers.append(f"“{q}” scored {s['score']:.2f}: {_clip(str(s.get('reason') or ''), 180)}")
+            drivers.append(f"“{q}” scored {_f2(s['score'])}: {_clip(str(s.get('reason') or ''), 180)}")
         if not failing:
             lo = min(rows, key=lambda rs: rs[1]["score"])
-            drivers.append(f"Lowest case: “{_clip(str(lo[0].get('input') or ''), 70)}” at {lo[1]['score']:.2f}.")
+            drivers.append(f"Lowest case: “{_clip(str(lo[0].get('input') or ''), 70)}” at {_f2(lo[1]['score'])}.")
         return {"status": "pass" if ok else "fail", "headline": headline, "drivers": drivers}
 
     # one case: say which claims drove it
@@ -547,7 +619,10 @@ def explain(metric: str, per_case: list, threshold: float) -> dict:
             drivers.append(f"{len(bad)} of {len(claims)} claims {what}. Each one lowers the score:")
             for c in bad[:4]:
                 p = c.get("p", c.get("p_supported", 0))
-                drivers.append(f"“{_clip(c['claim'], 110)}” (p={p:.2f})")
+                # contradiction rows store P(not contradicted); say what it means
+                shown = (f"P(contradicts)={_f2(1 - p)}" if d.get("kind") == "contradiction"
+                         else f"p={_f2(p)}")
+                drivers.append(f"“{_clip(c['claim'], 110)}” ({shown})")
             if len(bad) > 4:
                 drivers.append(f"…and {len(bad) - 4} more in the claims table.")
         else:
@@ -562,5 +637,5 @@ def explain(metric: str, per_case: list, threshold: float) -> dict:
         for x in listed[:3]:
             drivers.append(f"“{_clip(str(x), 110)}”")
     if not ok and threshold - mean < 0.1:
-        drivers.append(f"It missed the threshold by {threshold - mean:.2f}.")
+        drivers.append(f"It missed the threshold by {_f2(threshold - mean)}.")
     return {"status": "pass" if ok else "fail", "headline": headline, "drivers": drivers}

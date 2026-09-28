@@ -29,7 +29,11 @@ class FakeJev(BaseHTTPRequestHandler):
             self.send_response(401); self.end_headers(); return
         answers = {}
         for name, q in body["questions"].items():
-            if q["type"] == "noul":
+            if q["type"] == "noul" and name == "is_claim":
+                claim = body["state"]["claim"]
+                filler = claim.startswith(("Here's", "Hope this", "Let me know"))
+                answers[name] = {"type": "noul", "noul": 0.04 if filler else 0.96}
+            elif q["type"] == "noul":
                 claim = body["state"]["claim"]
                 answers[name] = {"type": "noul",
                                  "noul": 0.03 if "1937" in claim else 0.97}
@@ -187,6 +191,7 @@ def test_sandbox_lists_jev_only_when_key_set(monkeypatch):
 def test_sandbox_jev_faithfulness_end_to_end(jev_env, monkeypatch):
     import server
     monkeypatch.setenv("RETRIEVAL_JUDGE_BACKEND", "anthropic")  # server default is NOT jev
+    monkeypatch.setenv("JEV_SANDBOX_SPLIT", "llm")
     monkeypatch.setenv("GROQ_API_KEY", "g")
     seen = _stub_decomposer(monkeypatch, ["The Golden Gate Bridge has a 1,280 m main span.",
                                           "The Golden Gate Bridge opened in 1937."])
@@ -197,6 +202,7 @@ def test_sandbox_jev_faithfulness_end_to_end(jev_env, monkeypatch):
     assert out["aggregate"]["faithfulness"]["mean_score"] == 0.5
     assert out["per_case"][0]["scores"]["faithfulness"]["details"]["judge"] == "jev"
     assert out["judge_model"].startswith("jev-latest + ")
+    assert out["per_case"][0]["scores"]["faithfulness"]["details"]["split"] == "llm"
     assert seen["model"] == server.SANDBOX_PRESETS["groq-llama"]["model"]
     assert len(REQUESTS) == 2  # one Jev call per claim
 
@@ -214,6 +220,7 @@ def test_sandbox_jev_rejects_metrics_it_cannot_score(jev_env, monkeypatch):
 def test_sandbox_jev_hallucination(jev_env, monkeypatch):
     import server
     monkeypatch.setenv("GROQ_API_KEY", "g")
+    monkeypatch.setenv("JEV_SANDBOX_SPLIT", "llm")
     _stub_decomposer(monkeypatch, [
         {"claim": "The Golden Gate Bridge has a 2,000 m main span.", "quote": "2,000 m span"},
         {"claim": "The Golden Gate Bridge opened in 1937.", "quote": "opened 1937"}])
@@ -324,3 +331,44 @@ def test_faithfulness_rows_carry_display_fields(jev_env):
     row = r["details"]["claims"][0]
     assert row["bad"] and row["label"] == "unsupported" and row["quote"] == "It opened in 1937."
     assert r["details"]["kind"] == "support"
+
+
+# ---- fast path: sentences split in code, Jev decides what is a claim ----------
+
+def test_split_sentences():
+    import metrics as M
+    got = [c["claim"] for c in M.split_sentences(
+        "Here's the full picture. Booking.\nThe span is 1,280 m long. It opened in 1937! Is it red?")]
+    assert got == ["Here's the full picture.", "The span is 1,280 m long.", "It opened in 1937!"]
+
+
+def test_sandbox_default_is_sentence_split_with_no_llm_call(jev_env, monkeypatch):
+    import server, judge
+    monkeypatch.setenv("GROQ_API_KEY", "g")
+    monkeypatch.delenv("JEV_SANDBOX_SPLIT", raising=False)
+
+    def boom(*a, **k):
+        raise AssertionError("the fast path must not call the LLM")
+    monkeypatch.setattr(judge, "_openai", boom)
+    out = server.run_sandbox_eval(
+        [{"input": "Tell me about the bridge.",
+          "actual_output": "Here's the full picture for you. The main span is 1,280 metres. It opened in 1937.",
+          "retrieval_context": GG_CONTEXT}], "faithfulness", "jev")
+    assert "error" not in out, out
+    d = out["per_case"][0]["scores"]["faithfulness"]["details"]
+    assert d["split"] == "sentences" and d["skipped_non_claims"] == 1   # the filler sentence
+    assert [c["claim"] for c in d["claims"]] == ["The main span is 1,280 metres.", "It opened in 1937."]
+    assert out["aggregate"]["faithfulness"]["mean_score"] == 0.5
+    assert out["judge_model"] == "jev-latest \u00b7 sentence split"
+    # one call per sentence, each asking both questions, with the whole answer as context
+    assert len(REQUESTS) == 3
+    assert set(REQUESTS[0]["body"]["questions"]) == {"supported", "is_claim"}
+    assert "answer" in REQUESTS[0]["body"]["state"]
+
+
+def test_mcp_default_split_is_llm(jev_env, monkeypatch):
+    import judge
+    monkeypatch.delenv("RETRIEVAL_JEV_SPLIT", raising=False)
+    assert judge.jev_split_mode() == "llm"
+    monkeypatch.setenv("RETRIEVAL_JEV_SPLIT", "sentences")
+    assert judge.jev_split_mode() == "sentences"

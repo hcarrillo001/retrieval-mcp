@@ -102,3 +102,12 @@ def test_widget_inlines_the_shared_renderer():
     assert ".rr-card" in html and "__RR_" not in html
     assert html.count("</script>") == 2  # nothing in report.js closes the tag early
     assert server.SCORES_WIDGET_URI.endswith("/v4")
+
+
+def test_explain_rounds_like_the_page_and_names_p_contradicts():
+    v = M.explain("faithfulness", [_row(0, "q", 0.625, "r")], 0.7)
+    assert "averaged 0.63" in v["headline"]          # the page shows 0.63 too
+    claims = [{"claim": "x", "p": 0.0, "bad": True, "verdict": "contradicts"}]
+    v = M.explain("hallucination", [_row(0, "q", 0.0, "r", {"claims": claims, "kind": "contradiction"},
+                                         "hallucination")], 0.7)
+    assert "(P(contradicts)=1.00)" in v["drivers"][1]

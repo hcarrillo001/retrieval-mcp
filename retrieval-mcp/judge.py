@@ -131,7 +131,8 @@ class judge_as:
                 raise RuntimeError(f"model '{self.model_id}' needs {d['key_env']} "
                                    f"for splitting answers into claims")
             self._token = _override.set({"base_url": d["base_url"], "key": dkey,
-                                         "model": d["model"], "jev": True})
+                                         "model": d["model"], "jev": True,
+                                         "split": jev_split_mode(sandbox=True)})
             return self
         self._token = _override.set(
             {"base_url": p["base_url"], "key": key, "model": p["model"]})
@@ -432,6 +433,21 @@ def jev_map(fn, items: list) -> list:
     workers = max(1, min(len(items), int(os.environ.get("JEV_MAX_WORKERS", "8"))))
     with ThreadPoolExecutor(max_workers=workers) as ex:
         return list(ex.map(fn, items))
+
+
+def jev_split_mode(sandbox: bool = False) -> str:
+    """How Jev metrics find claims.
+        "sentences"  split in code, Jev also decides what is a claim: ~1 s, no LLM
+        "llm"        an LLM rewrites the answer into standalone claims: finer
+                     claims, but the LLM call dominates the run time
+    The sandbox preset defaults to sentences (JEV_SANDBOX_SPLIT); MCP runs to
+    llm (RETRIEVAL_JEV_SPLIT)."""
+    ov = _override.get()
+    if ov and ov.get("split"):
+        return ov["split"]
+    env = "JEV_SANDBOX_SPLIT" if sandbox else "RETRIEVAL_JEV_SPLIT"
+    v = (os.environ.get(env) or ("sentences" if sandbox else "llm")).strip().lower()
+    return v if v in ("sentences", "llm") else "llm"
 
 
 def judge_label() -> str:
