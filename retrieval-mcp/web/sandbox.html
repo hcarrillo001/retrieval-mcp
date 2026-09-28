@@ -94,6 +94,7 @@
       <button class="chip on" data-s="halluc">Hallucination</button>
       <button class="chip" data-s="clean">All-pass</button>
       <button class="chip" data-s="mixed">Mixed (3 cases)</button>
+      <button class="chip dim" data-s="jev" title="A long travel policy and an answer with 25+ claims. Run it with each judge and compare the time.">Jev showcase · 25+ claims</button>
       <button class="chip dim" data-s="custom">Paste your own</button>
     </div>
 
@@ -140,16 +141,38 @@
     });
   }
   pickChip(document.getElementById("samples"),"data-s",function(v){
-    sample=v;document.getElementById("customBox").classList.toggle("hide",v!=="custom");
+    sample=v;
+    // the showcase exists to show Jev, so pick it when the server offers it
+    if(v==="jev"){var sel=document.getElementById("model");
+      if(sel.querySelector('option[value="jev"]'))sel.value="jev";}document.getElementById("customBox").classList.toggle("hide",v!=="custom");
     document.getElementById("runBtn").textContent=v==="custom"?"Run my eval":"Run sample eval";
   });
   pickChip(document.getElementById("metrics"),"data-m",function(v){metric=v;});
+
+  // Jev gives no prose reason: the per-claim probabilities are the explanation
+  function claimList(claims){
+    if(!Array.isArray(claims)||!claims.length)return "";
+    // every Jev row carries p / bad / label (hallucination rows have no p_supported)
+    var norm=function(c){var p=(c.p!=null)?c.p:c.p_supported,bad=(c.bad!=null)?c.bad:!c.supported;
+      return {claim:c.claim,p:p,ok:!bad,label:c.label||(bad?'unsupported':'supported')};};
+    var rows=claims.map(norm).sort(function(a,b){return a.p-b.p;}).map(function(c){
+      var ok=c.ok;
+      return '<div style="display:flex;gap:10px;align-items:baseline;padding:5px 0;border-top:0.5px solid var(--line);font-size:12.5px">'+
+        '<span style="flex:0 0 44px;font-family:ui-monospace,monospace;font-variant-numeric:tabular-nums;color:'+(ok?'var(--pass-ink)':'var(--fail-ink)')+'">'+fm(c.p)+'</span>'+
+        '<span style="flex:1">'+esc(c.claim)+'</span>'+
+        '<span class="pill '+(ok?'pass':'fail')+'" style="flex:0 0 auto">'+esc(c.label)+'</span></div>';
+    }).join("");
+    return '<div style="margin-top:10px"><div class="l" style="font-size:11px;color:var(--faint);margin-bottom:4px">'+
+      'Every claim, with Jev\'s probability for it</div>'+rows+'</div>';
+  }
 
   function calcChips(details){
     if(!details||typeof details!=="object")return "";
     var chips=[];
     Object.keys(details).forEach(function(k){
       var v=details[k];
+      if(k==="claims"||k==="probabilities"||k==="legend"||k==="kind"||k==="judge")return;
+      if(k==="unsupported_claims"&&details.judge==="jev")return;  // shown in the claim list
       if(Array.isArray(v)){if(!v.length)return;chips.push('<span class="cchip bad"><b>'+v.length+'</b> '+esc(k.replace(/_/g," "))+'</span>');
         v.slice(0,3).forEach(function(it){chips.push('<span class="cchip bad">'+esc(String(it)).slice(0,70)+'</span>');});}
       else if(typeof v==="number")chips.push('<span class="cchip">'+esc(k.replace(/_/g," "))+' <b>'+v+'</b></span>');
@@ -173,26 +196,36 @@
         '<div class="cbody"><div class="cols">'+
           '<div class="col"><div class="l">Retrieved context · RAG simulation</div><div class="v">'+esc(ctx)+'</div></div>'+
           '<div class="col"><div class="l">Model output</div><div class="v">'+esc(c.actual_output||"—")+'</div></div>'+
-        '</div><div class="why '+(pass?'pass':'fail')+'">'+esc(sc.reason||"(no explanation)")+'</div>'+calcChips(sc.details)+'</div></div>';
+        '</div><div class="why '+(pass?'pass':'fail')+'">'+esc(sc.reason||"(no explanation)")+'</div>'+calcChips(sc.details)+claimList((sc.details||{}).claims)+'</div></div>';
     }).join("");
     var rem=(typeof data.remaining_today==="number")?(" · "+data.remaining_today+" runs left today"):"";
+    var secs=(typeof data.elapsed_ms==="number")?(" · scored in "+(data.elapsed_ms/1000).toFixed(1)+" s"):"";
+    // offer the same input on the other judge, so the time and scores can be compared
+    var sel=document.getElementById("model"),other=null;
+    Array.prototype.forEach.call(sel.options,function(o){if(!other&&o.value!==(lastPayload||{}).model)other=o;});
     document.getElementById("result").innerHTML=
       '<div class="card"><div class="chd"><span class="cic">'+RULER+'</span>'+
       '<div style="flex:1"><div style="font-weight:600;font-size:13.5px">'+esc(mname)+'</div>'+
-      '<div style="font-size:11px;color:var(--faint);margin-top:2px">threshold '+fm(thr)+' · '+cases.length+' case'+(cases.length===1?'':'s')+' · '+esc(data.judge_model||"")+'</div></div>'+
+      '<div style="font-size:11px;color:var(--faint);margin-top:2px">threshold '+fm(thr)+' · '+cases.length+' case'+(cases.length===1?'':'s')+' · '+esc(data.judge_model||"")+esc(secs)+'</div></div>'+
       '<span class="verd '+(anyFail?'fail':'pass')+'">'+(anyFail?'Needs review':'All pass')+'</span></div>'+
       '<div class="mtr"><span class="mname">Mean '+esc(mname)+'</span> <span class="mval" style="color:'+tcol+'">'+fm(mean)+'</span>'+
       '<div class="trk"><div class="fill" style="width:'+pct+'%;background:'+col+'"></div><div class="thr" style="left:'+Math.round(thr*100)+'%"></div></div></div>'+
       body+
-      '<div class="actions"><button id="again">Run another sample</button><button id="reset">New run (clears)</button></div></div>';
+      '<div class="actions">'+(other?'<button id="swap">Same input with '+esc(other.textContent)+'</button>':'')+
+      '<button id="again">Run another sample</button><button id="reset">New run (clears)</button></div></div>';
     document.getElementById("foot").textContent="Nothing is saved"+rem;
     document.getElementById("again").onclick=back;
     document.getElementById("reset").onclick=back;
+    if(other)document.getElementById("swap").onclick=function(){
+      sel.value=other.value;
+      run(Object.assign({},lastPayload,{model:other.value}));
+    };
   }
 
   function back(){document.getElementById("result").innerHTML="";document.getElementById("setup").classList.remove("hide");}
 
-  document.getElementById("runBtn").onclick=async function(){
+  var lastPayload=null;
+  document.getElementById("runBtn").onclick=function(){
     var payload={metric:metric,model:document.getElementById("model").value};
     if(sample==="custom"){
       payload.cases=[{input:document.getElementById("cInput").value,
@@ -200,6 +233,11 @@
         actual_output:document.getElementById("cOutput").value}];
       if(!payload.cases[0].input&&!payload.cases[0].actual_output){alert("Add an input and a model output to score.");return;}
     } else { payload.sample=sample; }
+    run(payload);
+  };
+
+  async function run(payload){
+    lastPayload=payload;
     document.getElementById("setup").classList.add("hide");
     document.getElementById("loading").classList.remove("hide");
     document.getElementById("result").innerHTML="";
@@ -215,7 +253,7 @@
       document.getElementById("loading").classList.add("hide");
       document.getElementById("result").innerHTML='<div class="err">'+esc(String(e))+'</div>';
     }
-  };
+  }
 })();
 </script>
 

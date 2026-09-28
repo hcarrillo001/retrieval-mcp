@@ -7,7 +7,8 @@
 <meta name="description" content="A local-first LLM-evaluation MCP server. Score RAG by stage (retriever vs generator), author metrics in plain language, track history and charts. Works inside Claude or your CI pipeline.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/report.css">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root{
     --ink:#1A1A1E;--muted:#8A8F98;--line:#EAEAEC;--paper:#FAFAFB;--card:#FFF;--soft:#F2F2F4;
@@ -181,6 +182,7 @@
   #sbx .sb-spin{width:24px;height:24px;border:2.5px solid var(--soft);border-top-color:var(--blue);border-radius:50%;margin:0 auto 12px;animation:sbsp .7s linear infinite;}
   @keyframes sbsp{to{transform:rotate(360deg);}}
   #sbx .sb-hide{display:none;}
+  #sbx.nojev .hide-nojev{display:none;}
   #sbx .sb-card{border:1px solid var(--line);border-radius:14px;overflow:hidden;margin-top:16px;}
   #sbx .sb-chd{display:flex;align-items:center;gap:11px;padding:13px 15px;border-bottom:1px solid var(--line);}
   #sbx .sb-cic{width:30px;height:30px;border-radius:9px;background:var(--blue-soft);color:var(--blue);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
@@ -313,10 +315,292 @@
     border-top:1px solid var(--line);background:rgba(239,244,254,.4);}
   #sbx .sb-rerun .rr-l{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);font-weight:600;}
   #sbx .sb-rerun .rr-b{display:flex;gap:7px;flex-wrap:wrap;}
-  #sbx .rr-btn{border:1px solid var(--blue);background:var(--card);color:var(--blue);
-    font-size:12.5px;font-family:var(--ui);padding:6px 12px;border-radius:99px;cursor:pointer;
-    transition:background .12s;}
-  #sbx .rr-btn:hover{background:var(--blue-soft);}
+
+  /* =====================================================================
+     Modern skin (2026-09). Direction: editorial/Swiss, as on Midpage and
+     Cursor: warm off-white, black type, regular-weight display, hairlines
+     instead of shadows, color only in the data. One override layer: delete this block to get the
+     previous look back. Same layout and sections; new type, color, surfaces.
+     ===================================================================== */
+  :root{
+    --ink:#0B0B0F;--muted:#5F6068;--faint:#6E6F77;--line:#E8E8EB;--line-2:#F0F0F2;
+    --paper:#FBFBFA;--card:#FFFFFF;--soft:#F4F4F5;
+    --blue:#2F5BEA;--blue-ink:#1F45C8;--blue-soft:#EEF2FE;
+    --pass:#0E7C4A;--pass-ink:#0B6B3F;--pass-soft:#EAF6EF;
+    --fail:#C2410C;--fail-ink:#9A3412;--fail-soft:#FDF0E7;
+    --ui:"Geist",ui-sans-serif,system-ui,sans-serif;--mono:"Geist Mono",ui-monospace,monospace;--display:"Geist",ui-sans-serif,system-ui,sans-serif;
+    --r:12px;--shadow:0 1px 2px rgba(11,11,15,.04),0 8px 24px -12px rgba(11,11,15,.10);
+  }
+  body{font-family:var(--ui);font-size:15px;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;}
+  ::selection{background:#DCE4FD;}
+  .wrap{max-width:1080px;padding:0 24px;}
+
+  /* background: a faint grid that fades out, instead of colored blobs */
+  .aurora{height:900px;}
+  .aurora::before{inset:0;width:auto;height:auto;top:0;left:0;transform:none;border-radius:0;filter:none;
+    background-image:linear-gradient(var(--line-2) 1px,transparent 1px),linear-gradient(90deg,var(--line-2) 1px,transparent 1px);
+    background-size:44px 44px;
+    -webkit-mask-image:radial-gradient(ellipse 70% 60% at 50% 0%,#000 30%,transparent 75%);
+            mask-image:radial-gradient(ellipse 70% 60% at 50% 0%,#000 30%,transparent 75%);}
+  .aurora::after{width:900px;height:420px;top:-160px;left:50%;transform:translateX(-50%);filter:blur(80px);
+    background:radial-gradient(closest-side,rgba(47,91,234,.13),transparent 70%);}
+
+  /* nav */
+  .nav{background:rgba(251,251,250,.78);-webkit-backdrop-filter:saturate(1.6) blur(12px);backdrop-filter:saturate(1.6) blur(12px);border-bottom-color:var(--line);}
+  .nav .row{height:60px;}
+  .wordmark{font-family:var(--ui);font-weight:600;font-size:18px;letter-spacing:-.02em;color:var(--ink);}
+  .wordmark .e{color:var(--blue);}
+  .brand svg{width:24px;height:24px;}
+  .navlinks{font-family:var(--ui);font-size:14px;gap:2px;}
+  .navlinks a{color:var(--muted);padding:8px 12px;border-radius:8px;transition:color .15s,background .15s;}
+  .navlinks a:hover{color:var(--ink);background:rgba(11,11,15,.05);}
+  .navlinks a.cta{display:inline-flex;align-items:center;gap:8px;background:var(--ink);color:#fff;margin-left:8px;padding:8px 14px;}
+  .navlinks a.cta:hover{background:#26262C;color:#fff;}
+  .navlinks a.cta svg{width:15px;height:15px;}
+
+  /* hero */
+  .hero{padding:88px 0 56px;}
+  .dist{gap:6px;margin-bottom:28px;}
+  .dist a,.dist .stat-pill{padding:6px 12px;font-size:13px;gap:8px;border-radius:999px;background:rgba(255,255,255,.7);border:1px solid var(--line);color:var(--ink);}
+  .dist a:hover{border-color:#CFCFD4;background:#fff;}
+  .dist a.stat-pill{border-color:rgba(14,124,74,.28);background:var(--pass-soft);color:var(--pass-ink);}
+  .dist a.stat-pill:hover{background:#DDF0E5;color:var(--pass-ink);}
+  .dist a.stat-pill:hover code,.dist a.stat-pill:hover .tick{color:var(--pass-ink);opacity:1;}
+  .dist a code,.dist .stat-pill code{font-family:var(--mono);font-size:12px;color:var(--muted);}
+  .dist .stat-pill code{color:var(--pass-ink);opacity:.8;}
+  .badge{font-family:var(--mono);font-size:12px;letter-spacing:.02em;background:transparent;color:var(--muted);padding:0;border:0;}
+  .badge::before{background:var(--pass);box-shadow:0 0 0 3px rgba(14,124,74,.15);}
+  h1{font-family:var(--display);font-weight:600;font-size:clamp(40px,7vw,72px);line-height:1.02;letter-spacing:-.045em;margin:18px 0 20px;}
+  h1 .accent{background:linear-gradient(95deg,#2F5BEA 10%,#6D5BF1 90%);-webkit-background-clip:text;background-clip:text;color:transparent;}
+  .hero .sub{font-size:19px;line-height:1.6;color:#3F4048;max-width:58ch;margin:0 0 32px;}
+  .hero .sub strong{color:var(--ink);font-weight:600;}
+  .btns{gap:10px;}
+  .btn{display:inline-flex;align-items:center;gap:8px;font-family:var(--ui);font-size:15px;font-weight:500;height:44px;padding:0 18px;border-radius:10px;border:1px solid var(--line);background:#fff;color:var(--ink);transition:background .15s,border-color .15s,transform .15s;}
+  .btn:hover{transform:none;border-color:#CFCFD4;}
+  .btn.primary{background:var(--ink);border-color:var(--ink);color:#fff;}
+  .btn.primary:hover{background:#26262C;}
+  .btn svg{width:16px;height:16px;}
+
+  /* sections */
+  section{padding:88px 0;border-top:1px solid var(--line);}
+  h2{font-family:var(--display);font-weight:600;font-size:clamp(28px,3.6vw,40px);letter-spacing:-.035em;line-height:1.1;margin:0 0 12px;}
+  .lead{font-size:16.5px;line-height:1.65;color:#3F4048;margin:0 0 36px;}
+  .feat,.flow,.setup,.mock,.chartcard{border-color:var(--line);border-radius:var(--r);box-shadow:var(--shadow);}
+  .feat h3{font-size:16px;letter-spacing:-.01em;}
+  .feat p{color:var(--muted);font-size:14px;}
+  .feat .tag,.flow .cap,.colh,th{font-family:var(--mono);letter-spacing:.06em;color:var(--faint);}
+  .step{border-radius:10px;}
+  pre{background:#0E0F13;border:1px solid #1D1F26;border-radius:var(--r);font-size:13px;}
+  .copy{font-family:var(--ui);background:#1C1E25;border-radius:7px;}
+  footer{font-family:var(--ui);font-size:13.5px;}
+
+  /* ---------- sandbox ---------- */
+  #sandbox{padding-top:88px;}
+  #sbx{--faint:#6E6F77;--pass-ink:#0B6B3F;--fail-soft:#FDF0E7;--fail-ink:#9A3412;--warn:#C2410C;--pass2:#0E7C4A;--fail2:#C2410C;max-width:1080px;}
+  #sbx .sb-panel,#sbx .sb-card{background:#fff;-webkit-backdrop-filter:none;backdrop-filter:none;border:1px solid var(--line);box-shadow:var(--shadow);}
+  #sbx .sb-panel{padding:28px;border-radius:16px;}
+  #sbx .sb-card{border-radius:16px;}
+  #sbx .sb-lbl{font-family:var(--ui);font-size:13px;font-weight:600;letter-spacing:0;text-transform:none;color:var(--ink);margin-bottom:10px;display:flex;align-items:center;gap:8px;}
+  #sbx .sb-lbl .n{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:6px;background:var(--soft);font-family:var(--mono);font-size:11px;color:var(--muted);}
+  #sbx .sb-chips{gap:8px;margin-bottom:24px;}
+  #sbx .sb-chip{height:38px;padding:0 14px;display:inline-flex;align-items:center;border-radius:10px;border:1px solid var(--line);background:#fff;color:var(--ink);font-size:14px;font-family:var(--ui);-webkit-backdrop-filter:none;backdrop-filter:none;transition:border-color .15s,background .15s,box-shadow .15s;}
+  #sbx .sb-chip:hover{border-color:#CFCFD4;}
+  #sbx .sb-chip.dim{color:var(--ink);}
+  #sbx .sb-chip.on{background:var(--ink);border-color:var(--ink);color:#fff;font-weight:500;}
+  #sbx .sb-chip.on .sb-i{opacity:.8;}
+  #sbx .sb-chip.jev{border-color:rgba(47,91,234,.35);background:var(--blue-soft);color:var(--blue-ink);}
+  #sbx .sb-chip.jev.on{background:var(--blue);border-color:var(--blue);color:#fff;}
+  #sbx .sb-chip .tagx{font-family:var(--mono);font-size:11px;margin-left:8px;opacity:.75;}
+  #sbx #sbMetrics .sb-chip{font-family:var(--mono);font-size:13px;}
+  #sbx .sb-chip:disabled{opacity:.45;cursor:not-allowed;}
+  #sbx .sb-preview{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:24px;}
+  #sbx .sb-preview .pv-title{font-family:var(--ui);font-size:13px;font-weight:600;letter-spacing:0;text-transform:none;color:var(--ink);}
+  #sbx .sb-preview .pv-col{background:#fff;border-color:var(--line);border-radius:10px;padding:12px;}
+  #sbx .sb-preview .pv-col .l,#sbx .sb-col .l{font-family:var(--mono);font-size:10.5px;letter-spacing:.05em;color:var(--faint);}
+  #sbx .sb-preview .pv-col .v{font-size:13px;}
+  #sbx .sb-preview .pv-note{font-size:12.5px;color:var(--muted);}
+  #sbx .sb-preview .pv-mk{background:var(--fail-soft);color:var(--fail-ink);box-shadow:inset 0 -2px 0 rgba(194,65,12,.45);border-radius:2px;}
+  #sbx .sb-mhint{font-size:12.5px;color:var(--muted);margin:-14px 0 24px;}
+  /* judge picker: radio cards, the select stays as the value holder */
+  #sbx #sbModel{position:absolute;opacity:0;pointer-events:none;width:1px;height:1px;}
+  #sbx .sb-judges{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;margin-bottom:24px;}
+  #sbx .sb-judge{display:flex;align-items:center;gap:12px;text-align:left;min-height:60px;padding:12px 14px;border-radius:12px;border:1px solid var(--line);background:#fff;cursor:pointer;font-family:var(--ui);color:var(--ink);transition:border-color .15s,box-shadow .15s;}
+  #sbx .sb-judge:hover{border-color:#CFCFD4;}
+  #sbx .sb-judge .dot{flex:none;width:16px;height:16px;border-radius:50%;border:1.5px solid #B4B5BC;background:#fff;box-sizing:border-box;transition:border .15s;}
+  #sbx .sb-judge[aria-checked="true"]{border-color:var(--ink);box-shadow:0 0 0 3px rgba(11,11,15,.06);}
+  #sbx .sb-judge[aria-checked="true"] .dot{border:5px solid var(--ink);}
+  #sbx .sb-judge .nm{font-size:14px;font-weight:600;display:block;}
+  #sbx .sb-judge .ds{font-size:12.5px;color:var(--muted);display:block;}
+  #sbx .sb-run{height:48px;padding:0;font-size:15px;font-weight:500;border-radius:12px;background:var(--ink);box-shadow:0 1px 2px rgba(11,11,15,.2),inset 0 1px 0 rgba(255,255,255,.08);transition:background .15s;}
+  #sbx .sb-run:hover{transform:none;background:#26262C;box-shadow:0 1px 2px rgba(11,11,15,.2);}
+  #sbx .sb-foot{font-size:12.5px;color:var(--faint);margin-top:12px;}
+  #sbx .sb-custom textarea{font-family:var(--ui);font-size:14px;border-radius:10px;padding:11px 12px;border-color:var(--line);background:#fff;}
+  #sbx .sb-custom textarea:focus{outline:none;border-color:var(--ink);box-shadow:0 0 0 3px rgba(11,11,15,.06);}
+  #sbx .sb-custom{margin-bottom:16px;}
+  /* result */
+  #sbx .sb-chd{padding:18px 20px;}
+  #sbx .sb-cic{background:var(--soft);color:var(--ink);border-radius:10px;}
+  #sbx .sb-meta{font-family:var(--mono);font-size:12px;color:var(--faint);margin-top:3px;}
+  #sbx .sb-verd{font-size:12.5px;padding:5px 12px;}
+  #sbx .sb-verd.fail{background:var(--fail-soft);color:var(--fail-ink);}
+  #sbx .sb-mtr{padding:20px 20px 22px;display:grid;grid-template-columns:auto 1fr;gap:6px 20px;align-items:end;}
+  #sbx .sb-mval{font-family:var(--display);font-weight:600;font-size:56px;letter-spacing:-.04em;line-height:.9;grid-row:span 2;}
+  #sbx .sb-mname{font-size:13.5px;color:var(--muted);}
+  #sbx .sb-trk{height:8px;background:var(--soft);margin-top:0;overflow:visible;}
+  #sbx .sb-thr{top:-4px;bottom:-4px;background:var(--ink);}
+  #sbx .sb-ch{padding:14px 20px;}
+  #sbx .sb-q{font-size:14px;}
+  #sbx .sb-cbody{padding:0 20px 18px;}
+  #sbx .sb-col{background:var(--paper);border-radius:10px;padding:12px;}
+  #sbx .sb-col .v{font-size:13px;}
+  #sbx .sb-why{font-size:13.5px;padding:12px 14px;border-radius:10px;}
+  #sbx .sb-pill{font-family:var(--mono);font-size:12px;font-weight:600;border-radius:8px;padding:4px 10px;}
+  #sbx .sb-cchip{font-family:var(--mono);font-size:11.5px;border-radius:7px;padding:4px 9px;}
+  #sbx .sb-rerun{padding:14px 20px;background:var(--paper);}
+  #sbx .sb-rerun .rr-l{font-family:var(--ui);font-size:13px;letter-spacing:0;text-transform:none;color:var(--muted);font-weight:500;}
+  #sbx .sb-actions{padding:14px 20px;}
+  #sbx .sb-actions button{height:40px;border-radius:10px;font-size:14px;font-family:var(--ui);}
+  #sbx .sb-actions button:hover{border-color:#CFCFD4;}
+  #sbx .sb-err{border-radius:12px;background:var(--fail-soft);color:var(--fail-ink);}
+  #sbx .sb-think .tx{background:linear-gradient(90deg,#9A9BA3 0%,#0B0B0F 45%,#2F5BEA 50%,#0B0B0F 55%,#9A9BA3 100%);background-size:220% 100%;-webkit-background-clip:text;background-clip:text;}
+  /* Jev: every claim with its probability */
+  #sbx .sb-claims{margin-top:14px;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fff;}
+  #sbx .sb-claims .hd{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:11px 14px;background:var(--paper);border-bottom:1px solid var(--line);font-size:12.5px;color:var(--muted);}
+  #sbx .sb-claims .hd b{color:var(--ink);font-weight:600;font-size:13px;}
+  #sbx .sb-claims .key{display:inline-flex;align-items:center;gap:6px;}
+  #sbx .sb-claims .key i{width:9px;height:9px;border-radius:3px;display:inline-block;}
+  #sbx .sb-cl{display:grid;grid-template-columns:48px minmax(0,1fr) 110px;gap:14px;align-items:center;padding:9px 14px;border-top:1px solid var(--line-2);font-size:13.5px;line-height:1.45;}
+  #sbx .sb-cl:first-of-type{border-top:0;}
+  #sbx .sb-cl .p{font-family:var(--mono);font-size:12.5px;font-variant-numeric:tabular-nums;}
+  #sbx .sb-cl .bar{height:6px;border-radius:99px;background:var(--soft);overflow:hidden;}
+  #sbx .sb-cl .bar span{display:block;height:100%;border-radius:99px;}
+  #sbx .sb-cl.bad .p{color:var(--fail-ink);} #sbx .sb-cl.bad .bar span{background:#E0712F;}
+  #sbx .sb-cl.ok .p{color:var(--blue-ink);}  #sbx .sb-cl.ok .bar span{background:var(--blue);}
+  #sbx .sb-claims .more{display:block;width:100%;height:40px;border:0;border-top:1px solid var(--line);background:var(--paper);font-family:var(--ui);font-size:13px;color:var(--ink);cursor:pointer;}
+  #sbx .sb-claims .more:hover{background:var(--soft);}
+
+  /* --- editorial pass (overrides the lines above) --- */
+  :root{--paper:#F7F7F4;--line:#E3E2DD;--line-2:#EDECE8;--shadow:none;--r:10px;}
+  body{background:var(--paper);}
+  .aurora{display:none;}
+  .nav{background:rgba(247,247,244,.85);}
+  .navlinks a.cta{border-radius:8px;}
+  .hero{padding:96px 0 40px;}
+  .hero-grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:56px;align-items:end;}
+  .hero-cols{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px;padding-bottom:6px;}
+  .hero-cols p{margin:0;font-size:15px;line-height:1.5;color:var(--muted);}
+  .hero-cols b{display:block;color:var(--ink);font-weight:500;margin-bottom:6px;}
+  @media(max-width:900px){.hero-grid{grid-template-columns:1fr;gap:40px;}}
+  @media(max-width:560px){.hero-cols{grid-template-columns:1fr;gap:16px;}}
+  h1{font-weight:450;font-size:clamp(44px,7.2vw,84px);letter-spacing:-.05em;line-height:.98;margin:20px 0 24px;}
+  .hero .sub{font-size:18px;color:var(--muted);max-width:44ch;margin-bottom:28px;}
+  .badge{font-size:12.5px;}
+  .btn{height:40px;border-radius:8px;font-size:14.5px;padding:0 16px;}
+  .dist{margin:56px 0 0;padding-top:20px;border-top:1px solid var(--line);gap:4px 20px;}
+  .dist a,.dist .stat-pill,.dist a.stat-pill{background:transparent;border:0;padding:4px 0;border-radius:0;color:var(--muted);font-size:13px;}
+  .dist a:hover,.dist a.stat-pill:hover{background:transparent;color:var(--ink);}
+  .dist .tick{color:var(--pass);}
+  .dist a code,.dist .stat-pill code{color:var(--faint);opacity:1;}
+  h2{font-weight:450;letter-spacing:-.04em;font-size:clamp(32px,4.2vw,48px);line-height:1.04;}
+  section{padding:104px 0;}
+  .feat,.flow,.setup,.mock,.chartcard{box-shadow:none;background:#FFFFFF;}
+  /* the loop diagram: its .step collided with the Cursor-setup .step grid */
+  .flow{padding:28px;}
+  .flow .steps{gap:12px;}
+  .flow .step{display:block;margin:0;padding:18px;border:1px solid var(--line);border-radius:10px;background:var(--paper);}
+  .flow .step .n{display:block;width:auto;height:auto;margin:0 0 10px;border-radius:0;background:none;
+    font-family:var(--mono);font-size:11.5px;font-weight:500;color:var(--faint);letter-spacing:.02em;}
+  .flow .step .t{font-size:17px;font-weight:500;letter-spacing:-.01em;line-height:1.3;margin:0;}
+  .flow .step .d{font-size:14px;color:var(--muted);margin-top:4px;}
+  .flow .arrow{color:#B4B3AE;}
+  /* sandbox as a product frame: app chrome on top, hairlines, no glow */
+  #sbx .sb-panel,#sbx .sb-card{box-shadow:none;border-color:var(--line);border-radius:12px;}
+  #sbx .sb-panel{padding:0;overflow:hidden;}
+  #sbx .sb-panel > *:not(.sb-chrome){margin-left:28px;margin-right:28px;}
+  #sbx .sb-chrome + .sb-lbl{margin-top:26px;}
+  #sbx .sb-panel > .sb-run{width:calc(100% - 56px);display:block;}
+  #sbx .sb-panel > .sb-foot{margin-bottom:24px;}
+  #sbx .sb-chrome{display:flex;align-items:center;gap:10px;height:44px;padding:0 16px;border-bottom:1px solid var(--line);background:#FBFBF9;font-size:13px;color:var(--muted);}
+  #sbx .sb-chrome i{width:10px;height:10px;border-radius:50%;background:#DEDDD8;display:inline-block;}
+  #sbx .sb-chrome .ttl{margin-left:8px;color:var(--ink);font-weight:500;}
+  #sbx .sb-chrome .sp{flex:1;}
+  #sbx .sb-chrome .mono{font-family:var(--mono);font-size:12px;}
+  #sbx .sb-chip.on{background:var(--ink);}
+  #sbx .sb-chip.jev.on{background:var(--ink);border-color:var(--ink);}
+  #sbx .sb-chip.jev{background:#fff;border-color:var(--line);color:var(--ink);}
+  #sbx .sb-chip.jev .tagx{color:var(--blue-ink);opacity:1;}
+  #sbx .sb-chip.jev.on .tagx{color:#B9C8FA;}
+  #sbx .sb-judge[aria-checked="true"]{box-shadow:none;}
+  #sbx .sb-preview{background:#FBFBF9;}
+  #sbx .sb-run{border-radius:10px;box-shadow:none;}
+  #sbx .sb-mval{font-weight:450;letter-spacing:-.05em;grid-column:1;grid-row:1 / span 2;}
+  #sbx .sb-mname{grid-column:2;grid-row:1;align-self:end;}
+  #sbx .sb-trk{grid-column:2;grid-row:2;align-self:start;margin-top:8px;}
+  #sbx .sb-mtr{grid-template-columns:auto minmax(0,1fr);column-gap:24px;align-items:center;}
+  /* long samples: keep context and output to a readable box that scrolls */
+  #sbx .sb-col .v{max-height:240px;overflow:auto;overscroll-behavior:contain;}
+  #sbx .sb-col{position:relative;}
+  @media(max-width:720px){#sbx .sb-cl .bar{display:none;} #sbx .sb-mval{font-size:44px;}}
+
+  /* --- result view + status colors: green pass, yellow medium, red fail --- */
+  :root{--pass:#15803D;--pass-ink:#166534;--pass-soft:#E9F6EE;--fail:#B42318;--fail-ink:#B42318;--fail-soft:#FDECEA;}
+  #sbx{--ok:#166534;--ok-soft:#E9F6EE;--ok-bar:#22A05A;--mid:#8A5A00;--mid-soft:#FDF4D8;--mid-bar:#E3A008;
+       --bad:#B42318;--bad-soft:#FDECEA;--bad-bar:#E5484D;--pass-ink:#166534;--fail-ink:#B42318;--fail-soft:#FDECEA;--pass2:#22A05A;--fail2:#E5484D;--warn:#E3A008;}
+  #sbx .sb-preview .pv-mk{background:var(--bad-soft);color:var(--bad);box-shadow:inset 0 -2px 0 rgba(229,72,77,.55);}
+  #sbx .t-ok{--c:var(--ok);--cs:var(--ok-soft);--cb:var(--ok-bar);}
+  #sbx .t-mid{--c:var(--mid);--cs:var(--mid-soft);--cb:var(--mid-bar);}
+  #sbx .t-bad{--c:var(--bad);--cs:var(--bad-soft);--cb:var(--bad-bar);}
+  #sbx .sb-verd[class*="t-"],#sbx .sb-pill[class*="t-"]{background:var(--cs);color:var(--c);}
+  #sbx .sb-why[class*="t-"]{background:var(--cs);color:var(--c);}
+  #sbx .sb-res{margin-top:0;overflow:visible;}
+  #sbx .sb-top{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);border-bottom:1px solid var(--line);}
+  #sbx .sb-score{padding:24px 28px;display:flex;flex-direction:column;gap:12px;}
+  #sbx .sb-score .r1{display:flex;align-items:center;gap:10px;}
+  #sbx .sb-score .mono{font-family:var(--mono);font-size:13px;color:var(--muted);}
+  #sbx .sb-score .r2{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;}
+  #sbx .sb-score .big{font-size:72px;line-height:.9;font-weight:450;letter-spacing:-.05em;color:var(--c);font-variant-numeric:tabular-nums;}
+  #sbx .sb-score .sub{font-size:15px;color:var(--muted);}
+  #sbx .sb-score .sb-trk{align-self:stretch;height:8px;margin:4px 0 0;overflow:visible;position:relative;background:var(--soft);border-radius:99px;}
+  #sbx .sb-score .sb-fill{background:var(--cb);}
+  #sbx .sb-score .sb-thr{top:-5px;bottom:-5px;width:2px;background:var(--ink);}
+  #sbx .sb-score .scale{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11.5px;color:var(--faint);}
+  #sbx .sb-cmp{padding:24px 28px;border-left:1px solid var(--line);display:flex;flex-direction:column;gap:12px;}
+  #sbx .sb-cmp .h{font-family:var(--mono);font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);}
+  #sbx .sb-cmp .grid{display:grid;grid-template-columns:auto minmax(60px,1fr) auto;gap:10px 14px;align-items:center;}
+  #sbx .sb-cmp .nm{font-size:14px;font-weight:600;}
+  #sbx .sb-cmp .bar{height:8px;border-radius:99px;background:var(--soft);overflow:hidden;}
+  #sbx .sb-cmp .bar span{display:block;height:100%;border-radius:99px;background:#8B8A85;}
+  #sbx .sb-cmp .bar span.jev{background:var(--blue);}
+  #sbx .sb-cmp .v{font-family:var(--mono);font-size:12.5px;color:var(--ink);text-align:right;white-space:nowrap;}
+  #sbx .sb-cmp p{margin:0;font-size:13px;color:var(--muted);}
+  #sbx .sb-cmp .btns{display:flex;gap:8px;flex-wrap:wrap;}
+  #sbx .sb-one{padding:20px 28px 24px;}
+  #sbx .sb-case .sb-ch{width:100%;border:0;background:none;text-align:left;font-family:var(--ui);color:var(--ink);padding:14px 28px;}
+  #sbx .sb-case .sb-cbody{padding:0 28px 22px;}
+  #sbx .sb-case{border-bottom:1px solid var(--line);}
+  #sbx .sb-claims{margin:14px 0 0;}
+  #sbx .sb-claims .hd .what{color:var(--muted);}
+  #sbx .sb-claims .key i{width:10px;height:10px;border-radius:3px;display:inline-block;}
+  #sbx .k-ok{background:var(--ok-bar);} #sbx .k-mid{background:var(--mid-bar);} #sbx .k-bad{background:var(--bad-bar);}
+  #sbx .sb-cl{grid-template-columns:48px minmax(0,1fr) 120px 118px;}
+  #sbx .sb-cl .p{color:var(--c);}
+  #sbx .sb-cl .bar span{background:var(--cb);}
+  #sbx .sb-cl .st{justify-self:end;font-size:12px;font-weight:600;padding:4px 10px;border-radius:99px;background:var(--cs);color:var(--c);white-space:nowrap;}
+  #sbx .sb-claims .more{padding:10px 14px;border-top:1px solid var(--line);background:var(--paper);}
+  #sbx .sb-claims .more button{height:34px;padding:0 13px;border-radius:9px;border:1px solid var(--line);background:#fff;font-family:var(--ui);font-size:13px;cursor:pointer;color:var(--ink);}
+  #sbx .sb-io{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:14px;}
+  #sbx .sb-box{border:1px solid var(--line);border-radius:12px;background:#fff;padding:18px 20px;min-width:0;}
+  #sbx .sb-box .l{font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);margin-bottom:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  #sbx .sb-box p{margin:0;font-size:14px;line-height:1.6;overflow-wrap:anywhere;}
+  #sbx .sb-box p.none{color:var(--faint);}
+  #sbx .sb-box details{border:1px solid var(--line-2);border-radius:8px;padding:9px 12px;margin-bottom:6px;}
+  #sbx .sb-box summary{cursor:pointer;font-size:13.5px;font-weight:500;}
+  #sbx .sb-box details p{margin-top:8px;font-size:13.5px;color:#3F4048;max-height:260px;overflow:auto;}
+  #sbx .sb-box p.out{line-height:1.75;}
+  #sbx .hl-key{font-family:var(--ui);text-transform:none;letter-spacing:0;font-size:12px;color:var(--bad);background:var(--bad-soft);padding:2px 8px;border-radius:6px;}
+  #sbx mark.hl{background:var(--cs);color:inherit;border-bottom:2px solid var(--cb);padding:1px 0;border-radius:2px;cursor:help;}
+  @media(max-width:860px){#sbx .sb-top,#sbx .sb-io{grid-template-columns:1fr;} #sbx .sb-cmp{border-left:0;border-top:1px solid var(--line);}
+    #sbx .sb-cl{grid-template-columns:44px minmax(0,1fr) auto;} #sbx .sb-cl .bar{display:none;} #sbx .sb-score .big{font-size:56px;}}
 </style>
 </head>
 <body>
@@ -335,11 +619,27 @@
     <a href="#demos" class="hideSm">Demos</a>
     <a href="#compare" class="hideSm">Compare</a>
     <a href="/dashboard">Dashboard</a>
-    <a href="https://github.com/hcarrillo001/retrieval-mcp" class="cta">GitHub</a>
+    <a href="https://github.com/hcarrillo001/retrieval-mcp" class="cta"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C6.5 2 2 6.6 2 12.3c0 4.5 2.9 8.3 6.8 9.7.5.1.7-.2.7-.5v-1.7c-2.8.6-3.4-1.4-3.4-1.4-.5-1.2-1.1-1.5-1.1-1.5-.9-.7.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.6 2.4 1.1 3 .9.1-.7.4-1.1.6-1.4-2.2-.3-4.6-1.2-4.6-5.2 0-1.1.4-2 1-2.8-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.7 1a9.2 9.2 0 015 0c1.9-1.3 2.7-1 2.7-1 .5 1.4.2 2.4.1 2.7.6.8 1 1.7 1 2.8 0 4-2.4 4.9-4.7 5.2.4.3.7.9.7 1.9v2.8c0 .3.2.6.7.5A10.3 10.3 0 0022 12.3C22 6.6 17.5 2 12 2z"/></svg>GitHub</a>
   </div>
 </div></nav>
 
 <header class="hero"><div class="wrap">
+  <div class="hero-grid">
+    <div class="hero-main">
+      <span class="badge">self-hosted · local-first · MCP</span>
+      <h1>Evals for AI systems, as an MCP.</h1>
+      <p class="sub">A local-first LLM-eval server for Claude or your CI pipeline. Try a real eval below, no signup.</p>
+      <div class="btns">
+        <a class="btn primary" href="#sandbox">Try it live</a>
+        <a class="btn" href="#quickstart">Quickstart</a>
+      </div>
+    </div>
+    <div class="hero-cols">
+      <p><b>Score RAG by stage.</b> Tell a retrieval miss from a generation miss, so you fix the right half.</p>
+      <p><b>Metrics in plain language.</b> Describe what good looks like and retriEVAL writes the rubric.</p>
+      <p><b>Every run tracked.</b> History, charts and a dashboard link for each eval you run.</p>
+    </div>
+  </div>
   <div class="dist">
     <a class="stat-pill" href="https://registry.modelcontextprotocol.io/?q=io.github.hcarrillo001" target="_blank" rel="noopener">
       <span class="tick">&check;</span> On the official MCP Registry
@@ -354,22 +654,21 @@
       Source &amp; Apache 2.0
     </a>
   </div>
-  <span class="badge">self-hosted · local-first · MCP</span>
-  <h1>Evals for AI systems, <span class="accent">as an MCP.</span></h1>
-  <p class="sub">A local-first LLM-eval server for Claude or your CI pipeline. Score RAG <strong>by stage</strong>, author metrics in plain language, and track every run. Try a real eval below, no signup.</p>
 </div></header>
 
 <section id="sandbox"><div class="wrap">
   <h2>Try it live</h2>
   <p class="lead">Run a real eval right here, no signup. Pick a sample (or paste your own input, context, and output), choose a free judge model, and watch retriEVAL score it. Nothing is saved.</p>
-  <div id="sbx">
+  <div id="sbx" class="nojev">
     <div class="sb-panel" id="sbSetup">
-      <div class="sb-lbl">1 · Choose a sample</div>
+      <div class="sb-chrome" aria-hidden="true"><i></i><i></i><i></i><span class="ttl">Sandbox</span><span class="sp"></span><span class="mono">free judges · nothing saved</span></div>
+      <div class="sb-lbl"><span class="n">1</span>Choose a sample</div>
       <div class="sb-chips" id="sbSamples">
         <button class="sb-chip on" data-s="halluc">Hallucination</button>
         <button class="sb-chip" data-s="clean">All-pass</button>
         <button class="sb-chip" data-s="mixed">Mixed (3 cases)</button>
         <button class="sb-chip" data-s="states">US capitals (all 50)</button>
+        <button class="sb-chip jev hide-nojev" data-s="jev">Jev showcase<span class="tagx">29 claims</span></button>
         <button class="sb-chip dim" data-s="custom">Paste your own</button>
       </div>
       <div class="sb-preview" id="sbPreview"></div>
@@ -378,16 +677,18 @@
         <textarea id="sbContext" placeholder="Retrieved context (simulates your RAG retrieval step)"></textarea>
         <textarea id="sbOutput" placeholder="Model output (what the system answered)"></textarea>
       </div>
-      <div class="sb-lbl">2 · Metric</div>
+      <div class="sb-lbl"><span class="n">2</span>Metric</div>
       <div class="sb-chips" id="sbMetrics">
         <button class="sb-chip on" data-m="answer_relevancy">answer_relevancy<span class="sb-i" tabindex="0" aria-label="What answer_relevancy measures">i<span class="sb-tip" id="tip-answer_relevancy"></span></span></button>
         <button class="sb-chip dim" data-m="faithfulness">faithfulness<span class="sb-i" tabindex="0" aria-label="What faithfulness measures">i<span class="sb-tip" id="tip-faithfulness"></span></span></button>
         <button class="sb-chip dim" data-m="hallucination">hallucination<span class="sb-i" tabindex="0" aria-label="What hallucination measures">i<span class="sb-tip" id="tip-hallucination"></span></span></button>
       </div>
-      <div class="sb-lbl">3 · Judge model</div>
-      <select id="sbModel">
+      <p class="sb-mhint sb-hide" id="sbJevHint">Jev checks every claim in parallel and shows its probability for each one.</p>
+      <div class="sb-lbl"><span class="n">3</span>Judge</div>
+      <select id="sbModel" aria-hidden="true" tabindex="-1">
         <option value="groq-llama">loading models…</option>
       </select>
+      <div class="sb-judges" id="sbJudges" role="radiogroup" aria-label="Judge"></div>
       <button class="sb-run" id="sbRun">Run sample eval</button>
       <p class="sb-foot" id="sbFoot">Runs on a free model · nothing is saved · limited per day</p>
     </div>
@@ -635,6 +936,7 @@ Score this with faithfulness:
   <div>retriEVAL · MIT · retrieval-mcp.com</div>
 </div></footer>
 
+<script src="/report.js"></script>
 <script>
   document.querySelectorAll(".copy").forEach(b=>{
     b.addEventListener("click",()=>{
@@ -658,8 +960,14 @@ Score this with faithfulness:
         };
       });
     }
+    function setMetric(m){
+      metric=m;
+      $("sbMetrics").querySelectorAll(".sb-chip").forEach(function(c){
+        var on=c.getAttribute("data-m")===m;c.classList.toggle("on",on);c.classList.toggle("dim",!on);});
+    }
     pick($("sbSamples"),"data-s",function(v){
       sample=v;$("sbCustom").classList.toggle("sb-hide",v!=="custom");
+      if(v==="jev"){setJudge("jev");setMetric("faithfulness");}
       $("sbRun").textContent=v==="custom"?"Run my eval":"Run sample eval";
       preview(v);
     });
@@ -695,6 +1003,29 @@ Score this with faithfulness:
     });
     pick($("sbMetrics"),"data-m",function(v){metric=v;});
 
+    // judge picker: radio cards over the hidden select (the select stays the value)
+    var JUDGE_SUB={jev:"Per-claim probabilities · experimental"};
+    function setJudge(id){
+      var sel=$("sbModel");
+      if(!sel.querySelector('option[value="'+id+'"]'))return;
+      sel.value=id;
+      $("sbJudges").querySelectorAll(".sb-judge").forEach(function(b){
+        b.setAttribute("aria-checked",String(b.getAttribute("data-j")===id));});
+      $("sbJevHint").classList.toggle("sb-hide",id!=="jev");
+    }
+    window.__sbJudges=function(models){
+      $("sbJudges").innerHTML=models.map(function(m){
+        var sub=JUDGE_SUB[m.id]||"LLM judge · free";
+        var name=m.label.split(" · ")[0];
+        return '<button type="button" class="sb-judge" role="radio" aria-checked="false" data-j="'+esc(m.id)+'">'+
+          '<span class="dot"></span><span><span class="nm">'+esc(name)+'</span><span class="ds">'+esc(sub)+'</span></span></button>';
+      }).join("");
+      $("sbJudges").querySelectorAll(".sb-judge").forEach(function(b){
+        b.onclick=function(){setJudge(b.getAttribute("data-j"));};});
+      if(models.some(function(m){return m.id==="jev";}))$("sbx").classList.remove("nojev");
+      setJudge($("sbModel").value);
+    };
+
     // what each curated sample contains, shown before running so the
     // input / RAG context / output relationship is clear
     var PREVIEWS={
@@ -706,6 +1037,10 @@ Score this with faithfulness:
         {q:"When was the Eiffel Tower completed?",c:"Completed in 1889 for the World's Fair.",o:"It was completed in 1889."},
         {q:"What is the Eiffel Tower made of?",c:"Built from wrought iron.",o:'It is made entirely of <span class="pv-mk">solid gold</span>.'},
         {q:"How many moons does Mars have?",c:"Mars has two small moons, Phobos and Deimos.",o:'Mars has <span class="pv-mk">12 moons</span>, the largest named <span class="pv-mk">Titan</span>.'}]},
+      jev:{note:"A five-section travel policy and a 29-claim answer. Nine claims sound right but the policy never says them. Run it with Jev, then with the other judge, and compare the time.",rows:[
+        {q:"Flying to Chicago for a three-day workshop, spouse joining for the weekend. Walk me through booking, approvals, what's covered and reimbursement.",
+         c:"Travel policy in five sections: booking and approval, what is covered, business plus personal travel, expenses and reimbursement, exceptions.",
+         o:'A long, confident walkthrough. Watch for <span class="pv-mk">booking directly with the airline</span>, <span class="pv-mk">business class</span>, <span class="pv-mk">wine on the per diem</span>, <span class="pv-mk">the spouse\'s airfare</span> and <span class="pv-mk">a mailed check</span>.'}]},
       states:{note:"All 50 state capitals, retrieved as three chunks. The answer is mostly right, which is the point. Six capitals or largest cities are swapped, and three extra facts were never in the retrieved text at all.",rows:[
         {q:"Which states are governed from a city that isn't their largest, and which capitals double as the biggest city?",
          c:"50 states listed as <em>State: capital X; largest city Y</em>, split across three retrieved chunks (A-I, K-N, O-W).",
@@ -736,61 +1071,53 @@ Score this with faithfulness:
       var chips=[];
       Object.keys(d).forEach(function(k){
         var v=d[k];
+        if(k==="claims"||k==="probabilities"||k==="legend"||k==="kind"||k==="judge")return;
+        if(d.judge==="jev"&&(k==="unsupported_claims"||k==="contradictions"||k==="level_score"||k==="top_level"))return;
         if(Array.isArray(v)){if(!v.length)return;chips.push('<span class="sb-cchip bad"><b>'+v.length+'</b> '+esc(k.replace(/_/g," "))+'</span>');
           v.slice(0,8).forEach(function(it){chips.push('<span class="sb-cchip bad">'+esc(String(it)).slice(0,110)+'</span>');});}
         else if(typeof v==="number")chips.push('<span class="sb-cchip">'+esc(k.replace(/_/g," "))+' <b>'+v+'</b></span>');
       });
       return chips.length?'<div class="sb-calc">'+chips.join("")+'</div>':"";
     }
+    // ---------- result view: the shared renderer in /report.js ----------
+    // judge comparison: real scores and timings of this same input on each judge
+    var RUNS={};
+    function runKey(p){var q=Object.assign({},p);delete q.model;return JSON.stringify(q);}
+    function compareHtml(){
+      var key=runKey(lastPayload||{}),seen=RUNS[key]||{},opts=Array.prototype.slice.call($("sbModel").options);
+      var max=0;Object.keys(seen).forEach(function(k){max=Math.max(max,seen[k].ms||0);});
+      var rows=opts.map(function(o){var r=seen[o.value],nm=o.textContent.split(" · ")[0];
+        var w=r&&max?Math.max(4,Math.round(r.ms/max*100)):0;
+        return '<span class="nm">'+esc(nm)+'</span><span class="bar"><span class="'+(o.value==="jev"?"jev":"")+'" style="width:'+w+'%"></span></span>'+
+          '<span class="v">'+(r?(fm(r.score)+' · '+(r.ms/1000).toFixed(1)+' s'):'not run')+'</span>';}).join("");
+      var others=opts.filter(function(o){return o.value!==(lastPayload||{}).model;});
+      return '<div class="rr-side"><div class="h">Judge comparison</div><div class="grid">'+rows+'</div>'+
+        '<p>Same input on each judge. Run the other one to compare scores and time.</p>'+
+        '<div class="btns">'+others.map(function(o){return '<button type="button" class="rr-btn sb-judge-swap" data-j="'+esc(o.value)+'">Rerun with '+esc(o.textContent.split(" · ")[0])+'</button>';}).join("")+
+        '<button type="button" class="rr-btn" id="sbCopy">Copy as JSON</button></div></div>';
+    }
     function render(data){
-      var agg=data.aggregate||{},cases=data.per_case||[],thr=data.threshold||0.7;
-      var mn=Object.keys(agg)[0]||metric,a=agg[mn]||{},mean=a.mean_score;
-      var anyFail=cases.some(function(c){var sc=(c.scores||{})[mn]||{};return sc.success===false;});
-      var tcol=mean>=thr?"var(--pass-ink)":"var(--fail-ink)";
-      var col=mean>=thr?"var(--pass2)":(mean>=0.4?"var(--warn)":"var(--fail2)");
-      var pct=Math.max(2,Math.round((mean||0)*100));
-      var body=cases.map(function(c,i){
-        var sc=(c.scores||{})[mn]||{};var pass=sc.success!==false;
-        var ctx=Array.isArray(c.retrieval_context)?c.retrieval_context.join(" • "):(c.retrieval_context||"not provided");
-        return '<div class="sb-case open" id="sbcs'+i+'"><div class="sb-ch" onclick="document.getElementById(\'sbcs'+i+'\').classList.toggle(\'open\')">'+
-          '<span class="sb-pill '+(pass?'pass':'fail')+'">'+fm(sc.score)+' '+(pass?'pass':'fail')+'</span>'+
-          '<span class="sb-q">'+esc(c.input||"not provided")+'</span><span class="sb-caret">▶</span></div>'+
-          '<div class="sb-cbody"><div class="sb-cols sb-cols3">'+
-            '<div class="sb-col"><div class="l">Input</div><div class="v">'+esc(c.input||"not provided")+'</div></div>'+
-            '<div class="sb-col"><div class="l">Retrieved context · RAG simulation</div><div class="v">'+esc(ctx)+'</div></div>'+
-            '<div class="sb-col"><div class="l">Model output</div><div class="v">'+esc(c.actual_output||"not provided")+'</div></div>'+
-          '</div><div class="sb-why '+(pass?'pass':'fail')+'">'+esc(sc.reason||"(no explanation)")+'</div>'+calcChips(sc.details)+'</div></div>';
-      }).join("");
+      var mn=Object.keys(data.aggregate||{})[0]||metric;
+      if(lastPayload&&typeof data.elapsed_ms==="number"){var k=runKey(lastPayload);RUNS[k]=RUNS[k]||{};
+        RUNS[k][lastPayload.model]={ms:data.elapsed_ms,score:((data.aggregate||{})[mn]||{}).mean_score};}
       var rem=(typeof data.remaining_today==="number")?(" · "+data.remaining_today+" runs left today"):"";
-      $("sbResult").innerHTML=
-        '<div class="sb-card"><div class="sb-chd"><span class="sb-cic">'+RULER+'</span>'+
-        '<div style="flex:1"><div style="font-weight:600;font-size:13.5px">'+esc(mn)+'</div>'+
-        '<div style="font-size:11px;color:var(--faint);margin-top:2px">threshold '+fm(thr)+' · '+cases.length+' case'+(cases.length===1?'':'s')+' · '+esc(data.judge_model||"")+'</div></div>'+
-        '<span class="sb-verd '+(anyFail?'fail':'pass')+'">'+(anyFail?'Needs review':'All pass')+'</span></div>'+
-        '<div class="sb-mtr"><span class="sb-mname">Mean '+esc(mn)+'</span> <span class="sb-mval" style="color:'+tcol+'">'+fm(mean)+'</span>'+
-        '<div class="sb-trk"><div class="sb-fill" style="width:'+pct+'%;background:'+col+'"></div><div class="sb-thr" style="left:'+Math.round(thr*100)+'%"></div></div></div>'+
-        body+
-        '<div class="sb-rerun"><span class="rr-l">Score the same case with</span><span class="rr-b" id="sbRerun"></span></div>'+
-        '<div class="sb-actions"><button id="sbAgain">Run another sample</button><button id="sbReset">New run (clears)</button></div></div>';
-      $("sbFoot").textContent="Nothing is saved"+rem;
-      if(data.notice){$("sbResult").insertAdjacentHTML("afterbegin",
-        '<div class="sb-notice">'+esc(data.notice)+'</div>');}
-      // re-run the identical inputs under a different metric
       var others=["answer_relevancy","faithfulness","hallucination"].filter(function(m){return m!==mn;});
-      $("sbRerun").innerHTML=others.map(function(m){
-        return '<button class="rr-btn" data-rr="'+m+'">'+m+'</button>';}).join("");
-      $("sbRerun").querySelectorAll(".rr-btn").forEach(function(b){
-        b.onclick=function(){
-          var m=b.getAttribute("data-rr");
-          metric=m;                                   // keep chip state in sync
-          $("sbMetrics").querySelectorAll(".sb-chip").forEach(function(c){
-            var on=c.getAttribute("data-m")===m;
-            c.classList.toggle("on",on);c.classList.toggle("dim",!on);});
-          var p=Object.assign({},lastPayload);p.metric=m;
-          runEval(p);
-        };
+      RetrievalReport.mount($("sbResult"),data,{
+        side:compareHtml,
+        footer:'<div class="rr-foot"><span class="l">Score the same case with</span>'+
+          others.map(function(m){return '<button type="button" class="rr-btn mono sb-rerun-m" data-m="'+m+'">'+m+'</button>';}).join("")+'</div>'+
+          '<div class="rr-foot actions"><button type="button" class="rr-btn" id="sbAgain">Run another sample</button><button type="button" class="rr-btn" id="sbReset">New run (clears)</button></div>',
+        onRender:function(el){
+          el.querySelectorAll(".sb-rerun-m").forEach(function(b){b.onclick=function(){
+            var m=b.getAttribute("data-m");setMetric(m);runEval(Object.assign({},lastPayload,{metric:m}));};});
+          el.querySelectorAll(".sb-judge-swap").forEach(function(b){b.onclick=function(){
+            var j=b.getAttribute("data-j");setJudge(j);runEval(Object.assign({},lastPayload,{model:j}));};});
+          var cp=$("sbCopy");if(cp)cp.onclick=function(){
+            try{navigator.clipboard.writeText(JSON.stringify(data,null,2)).then(function(){cp.textContent="Copied";setTimeout(function(){cp.textContent="Copy as JSON";},1200);});}catch(e){}};
+          $("sbAgain").onclick=back;$("sbReset").onclick=back;
+        }
       });
-      $("sbAgain").onclick=back;$("sbReset").onclick=back;
+      $("sbFoot").textContent="Nothing is saved"+rem;
     }
     function back(){$("sbResult").innerHTML="";$("sbSetup").classList.remove("sb-hide");}
 
@@ -824,19 +1151,21 @@ Score this with faithfulness:
 // the judge list comes from the server, so a model retired or removed on the
 // backend can never leave a dead option in this picker
 (async function () {
-  var sel = document.getElementById("sbModel");
+  var sel = document.getElementById("sbModel"), models = [];
   if (!sel) return;
   try {
     var r = await fetch("/api/sandbox?models=1");
     if (!r.ok) throw new Error(r.status);
-    var models = (await r.json()).models || [];
+    models = (await r.json()).models || [];
     if (!models.length) throw new Error("empty");
     sel.innerHTML = models.map(function (m) {
       return '<option value="' + m.id + '">' + m.label + "</option>";
     }).join("");
   } catch (e) {
     sel.innerHTML = '<option value="groq-llama">default judge</option>';
+    models = [{ id: "groq-llama", label: "default judge" }];
   }
+  if (window.__sbJudges) window.__sbJudges(models);
 })();
 </script>
 </body>

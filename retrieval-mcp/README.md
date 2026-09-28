@@ -206,6 +206,52 @@ export RETRIEVAL_JUDGE_BACKEND=ollama
 export RETRIEVAL_JUDGE_MODEL=deepseek-r1:70b
 ```
 
+### Jev (experimental)
+
+[Jev](https://docs.typesafe.ai) is a decision model: it returns probabilities,
+not text. With `RETRIEVAL_JUDGE_BACKEND=jev`, `faithfulness` becomes a hybrid:
+an LLM splits the answer into standalone claims, Jev checks every claim against
+the context in parallel, and the score is supported claims / total claims
+(the same definition as the LLM rubric). The reason lists the unsupported claims
+with their probabilities, and `details.claims` has every claim's `p_supported`.
+`hallucination` uses the same claims with one Jev Choice per claim (supports /
+contradicts / says nothing): score = 1 - contradicted / total, and claims the
+context is silent on are reported as "not in context" rather than penalised.
+`answer_relevancy` is a Jev Score on a 5-level rubric and needs no LLM call.
+Each claim also carries the exact passage of the answer it came from (`quote`),
+which the sandbox highlights. Every other metric still runs on the LLM set by
+`RETRIEVAL_DECOMPOSER_BACKEND`.
+
+```bash
+export RETRIEVAL_JUDGE_BACKEND=jev
+export TYPESAFE_API_KEY=...                       # console.typesafe.ai/keys
+export RETRIEVAL_DECOMPOSER_BACKEND=anthropic     # or ollama / openai
+# optional: JEV_MODEL (jev-latest), JEV_MAX_WORKERS (8), JEV_PRICE_IN (0.042)
+```
+
+Or leave the server default alone and pick Jev per call: `run_eval` and
+`evaluate_case` take `judge="jev"` (or `judge="llm"` to force the LLM judge).
+Once `TYPESAFE_API_KEY` is set on the server, the sandbox picker also lists
+"Jev · TypeSafe", with claims split by the Groq preset.
+
+Jev spend counts toward `RETRIEVAL_BUDGET_USD`. Jev is weak on numbers, dates
+and adversarial text, and its agreement with human labels has not been measured
+here yet, so treat Jev scores as experimental.
+
+## Reports: why a run passed or failed
+
+Every `run_eval` result carries `aggregate[metric].verdict`: a headline ("Fails:
+faithfulness averaged 0.33, below the 0.70 threshold") and the drivers behind
+it (the failing cases, or the unsupported claims). It is saved with the run.
+
+- **In Claude**, `summary_md` includes the verdict, and clients that support
+  MCP Apps render a compact card inline: the headline score, the other metrics,
+  and a checklist of what failed and why.
+- **The full report** is `report_url` (`/report?run=<id>` on your dashboard
+  host): score, verdict, every claim, and the answer with its problem passages
+  highlighted. It is the same view the sandbox shows after a run, drawn by one
+  shared renderer (`web/report.js`, `web/report.css`).
+
 ## Tools
 
 | Tool | Purpose |

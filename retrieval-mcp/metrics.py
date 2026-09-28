@@ -269,6 +269,223 @@ def missing_inputs(metric: str, case: dict) -> list:
     return out
 
 
+# ---------------------------------------------------------------------------
+# Jev (decision-model) variants
+#
+# Jev answers typed questions with probabilities and gives no reasons. The
+# hybrid: an LLM (jj) still does the language work of splitting an answer into
+# claims, Jev scores each claim, and the per-claim probabilities ARE the
+# explanation. `ask(state, questions) -> answers` is judge.jev_ask and `pmap`
+# runs it in parallel; both are injected, so this module stays I/O-free and
+# testable with stubs.
+# ---------------------------------------------------------------------------
+
+JEV_SUPPORT_CUTOFF = 0.5  # a claim counts as supported when P(supported) >= this
+
+_CLAIMS_PROMPT = """Split the ANSWER into its atomic factual claims.
+Each claim must stand on its own: replace pronouns and references with what they
+refer to (write "The Golden Gate Bridge opened in 1937", not "It opened in 1937"),
+because each claim is checked later without the rest of the answer.
+Skip greetings, hedges and questions; they are not claims.
+For each claim also give "quote": the shortest passage copied EXACTLY, character
+for character, from the ANSWER that states it (so it can be highlighted there).
+Return JSON: {{"claims": [{{"claim": str, "quote": str}}]}}
+
+QUESTION (for resolving references only):
+{question}
+
+ANSWER:
+{answer}"""
+
+RELEVANCY_LEVELS = [
+    "Does not address the question at all",
+    "Touches the topic but misses what was actually asked",
+    "Partly answers; key parts are missing or buried in unrelated material",
+    "Answers the question, with minor padding or drift",
+    "Directly and completely answers exactly what was asked",
+]
+
+
+def _locate(quote, answer: str):
+    """The exact substring of `answer` a quote refers to, or None. LLMs drift on
+    case and whitespace when copying, so match loosely but return the answer's
+    own text, which is what the page highlights."""
+    if not isinstance(quote, str) or not quote.strip():
+        return None
+    q = quote.strip()
+    if q in answer:
+        return q
+    import re
+    pat = r"\s+".join(re.escape(w) for w in q.split())
+    m = re.search(pat, answer, flags=re.IGNORECASE)
+    return m.group(0) if m else None
+
+
+def extract_claims_with_quotes(case: dict, jj: JudgeJSON) -> list:
+    """[{"claim", "quote"}]; quote is None when it can't be found in the answer.
+    Accepts the older plain-string shape too."""
+    answer = case.get("actual_output", "") or ""
+    r = jj(_SYS, _CLAIMS_PROMPT.format(question=case.get("input", ""), answer=answer))
+    out = []
+    for c in (r.get("claims") or []):
+        if isinstance(c, str) and c.strip():
+            out.append({"claim": c.strip(), "quote": _locate(c, answer)})
+        elif isinstance(c, dict) and isinstance(c.get("claim"), str) and c["claim"].strip():
+            out.append({"claim": c["claim"].strip(), "quote": _locate(c.get("quote"), answer)})
+    return out
+
+
+def extract_claims(case: dict, jj: JudgeJSON) -> list:
+    return [c["claim"] for c in extract_claims_with_quotes(case, jj)]
+
+
+def _clip(s: str, n: int = 90) -> str:
+    return s if len(s) <= n else s[: n - 1] + "…"
+
+
+def faithfulness_jev(case: dict, jj: JudgeJSON, ask, pmap=None,
+                     threshold: float = 0.7) -> dict:
+    """faithfulness = supported claims / total claims, with Jev deciding support.
+
+    Same definition as the LLM rubric, so scores are comparable across backends;
+    the difference is that every claim gets a probability, which is the reason."""
+    pmap = pmap or (lambda f, xs: list(map(f, xs)))
+    ctx = case.get("retrieval_context") or case.get("context") or []
+    ctx = ctx if isinstance(ctx, list) else [ctx]
+    found = extract_claims_with_quotes(case, jj)
+    claims = [c["claim"] for c in found]
+    if not claims:
+        return _result("faithfulness", 1.0, threshold,
+                       "No factual claims in the answer, so nothing can be unsupported.",
+                       {"judge": "jev", "claims": [], "total_claims": 0,
+                        "supported_claims": 0, "unsupported_claims": []})
+
+    def check(claim):
+        a = ask({"context": "\n".join(ctx), "claim": claim},
+                {"supported": {"type": "noul",
+                               "instructions": "The claim is directly supported by the context"}})
+        return float(a["supported"]["noul"])
+
+    probs = pmap(check, claims)
+    # p / bad / label are the display fields every Jev claim list shares
+    rows = [{"claim": f["claim"], "quote": f["quote"], "p_supported": round(p, 4),
+             "supported": p >= JEV_SUPPORT_CUTOFF,
+             "p": round(p, 4), "bad": p < JEV_SUPPORT_CUTOFF,
+             "label": "supported" if p >= JEV_SUPPORT_CUTOFF else "unsupported"}
+            for f, p in zip(found, probs)]
+    unsupported = [r for r in rows if not r["supported"]]
+    n_sup = len(rows) - len(unsupported)
+    if unsupported:
+        worst = sorted(unsupported, key=lambda r: r["p_supported"])
+        named = "; ".join(f"“{_clip(r['claim'])}” (p={r['p_supported']:.2f})"
+                          for r in worst[:3])
+        reason = (f"{n_sup} of {len(rows)} claims are supported by the context. "
+                  f"Unsupported: {named}.")
+    else:
+        lo = min(rows, key=lambda r: r["p_supported"])
+        reason = (f"All {len(rows)} claims are supported by the context (weakest: "
+                  f"“{_clip(lo['claim'])}” at p={lo['p_supported']:.2f}).")
+    return _result("faithfulness", n_sup / len(rows), threshold, reason,
+                   {"judge": "jev", "kind": "support", "claims": rows,
+                    "total_claims": len(rows), "supported_claims": n_sup,
+                    "unsupported_claims": [r["claim"] for r in unsupported]})
+
+
+HALLUCINATION_CHOICES = {
+    "supports": "The context states the claim or directly implies that it is true",
+    "contradicts": "The context states the opposite of the claim or implies it is false",
+    "says_nothing": "The context does not address what the claim asserts, either way",
+}
+_VERDICT_LABEL = {"supports": "supported", "contradicts": "contradicts",
+                  "says_nothing": "not in context"}
+
+
+def hallucination_jev(case: dict, jj: JudgeJSON, ask, pmap=None,
+                      threshold: float = 0.7) -> dict:
+    """hallucination = 1 - contradicted claims / total claims.
+
+    Each claim gets one Jev Choice (supports / contradicts / says nothing), the
+    citation-check pattern from TypeSafe's cookbook. Only a contradiction counts
+    against the score: a claim the context is silent on is reported as "not in
+    context" (faithfulness is the metric that penalises those)."""
+    pmap = pmap or (lambda f, xs: list(map(f, xs)))
+    ctx = case.get("context") or case.get("retrieval_context") or []
+    ctx = ctx if isinstance(ctx, list) else [ctx]
+    found = extract_claims_with_quotes(case, jj)
+    if not found:
+        return _result("hallucination", 1.0, threshold,
+                       "No factual claims in the answer, so nothing can contradict the context.",
+                       {"judge": "jev", "kind": "contradiction", "claims": [],
+                        "total_claims": 0, "contradictions": []})
+
+    def check(f):
+        a = ask({"context": "\n".join(ctx), "claim": f["claim"]},
+                {"relation": {"type": "choice",
+                              "instructions": "How does the context relate to the claim?",
+                              "criteria": HALLUCINATION_CHOICES}})["relation"]
+        probs = {k: float(v) for k, v in (a.get("probabilities") or {}).items()}
+        verdict = a.get("choice") or (max(probs, key=probs.get) if probs else "says_nothing")
+        return verdict, probs, a.get("confidence")
+
+    results = pmap(check, found)
+    rows = []
+    for f, (verdict, probs, conf) in zip(found, results):
+        p_contra = probs.get("contradicts", 1.0 if verdict == "contradicts" else 0.0)
+        rows.append({"claim": f["claim"], "quote": f["quote"], "verdict": verdict,
+                     "probabilities": probs, "confidence": conf,
+                     # display: probability the claim is NOT contradicted, so higher
+                     # is better in every Jev claim list
+                     "p": round(1 - p_contra, 4), "bad": verdict == "contradicts",
+                     "label": _VERDICT_LABEL.get(verdict, verdict)})
+    contra = [r for r in rows if r["bad"]]
+    silent = [r for r in rows if r["verdict"] == "says_nothing"]
+    if contra:
+        named = "; ".join(f"“{_clip(r['claim'])}” (P(contradicts)={1 - r['p']:.2f})"
+                          for r in sorted(contra, key=lambda r: r["p"])[:3])
+        reason = f"{len(contra)} of {len(rows)} claims contradict the context: {named}."
+    else:
+        reason = f"None of the {len(rows)} claims contradicts the context."
+    if silent:
+        reason += (f" {len(silent)} more are not in the context at all "
+                   f"(not counted here; faithfulness scores those).")
+    return _result("hallucination", 1 - len(contra) / len(rows), threshold, reason,
+                   {"judge": "jev", "kind": "contradiction", "claims": rows,
+                    "total_claims": len(rows),
+                    "contradictions": [r["claim"] for r in contra],
+                    "not_in_context": len(silent)})
+
+
+def answer_relevancy_jev(case: dict, jj: JudgeJSON, ask, pmap=None,
+                         threshold: float = 0.7) -> dict:
+    """Relevancy as a Jev Score on a 5-level rubric, normalised to 0-1.
+    Jev's score is the probability-weighted level (0..4), so it is already
+    continuous; dividing by the top level puts it on the usual scale. No LLM call."""
+    a = ask({"question": case.get("input", ""), "answer": case.get("actual_output", "")},
+            {"relevancy": {"type": "score",
+                           "instructions": "How relevant is the answer to the question?",
+                           "criteria": RELEVANCY_LEVELS}})["relevancy"]
+    top = len(RELEVANCY_LEVELS) - 1
+    raw = float(a["score"])
+    probs = a.get("probabilities") or {}
+    level = max(probs, key=lambda k: probs[k]) if probs else str(round(raw))
+    legend = a.get("legend") or {str(i): d for i, d in enumerate(RELEVANCY_LEVELS)}
+    conf = a.get("confidence")
+    reason = (f"Most likely level {level}/{top}: “{legend.get(str(level), '')}”"
+              + (f" (confidence {float(conf):.2f})." if conf is not None else "."))
+    return _result("answer_relevancy", raw / top, threshold, reason,
+                   {"judge": "jev", "level_score": raw, "top_level": top,
+                    "probabilities": probs, "confidence": conf})
+
+
+# metrics that have a Jev path; the rest run on the LLM judge even when the
+# backend is jev
+JEV = {
+    "faithfulness": faithfulness_jev,
+    "answer_relevancy": answer_relevancy_jev,
+    "hallucination": hallucination_jev,
+}
+
+
 BUILTIN = {
     "answer_relevancy": answer_relevancy,
     "faithfulness": faithfulness,
@@ -280,3 +497,70 @@ BUILTIN = {
     "toxicity": toxicity,
     "summarization": summarization,
 }
+
+
+# ---------------------------------------------------------------------------
+# Why a run passed or failed
+#
+# Deterministic, no judge call: it only restates what the scores already say,
+# in the order someone reviewing the run needs it. The sandbox, the report page,
+# the MCP widget and the text Claude reads all show this same verdict.
+# ---------------------------------------------------------------------------
+
+def explain(metric: str, per_case: list, threshold: float) -> dict:
+    """per_case: rows as saved by run_eval / the sandbox, each with
+    {"index", "input", "scores": {metric: {"score", "success", "reason", "details"}}}.
+    Returns {"status": "pass"|"fail", "headline": str, "drivers": [str]}."""
+    rows = [(r, (r.get("scores") or {}).get(metric)) for r in per_case]
+    rows = [(r, s) for r, s in rows if s and s.get("score") is not None]
+    if not rows:
+        return {"status": "fail", "headline": f"No {metric} scores were produced.", "drivers": []}
+    scores = [s["score"] for _, s in rows]
+    mean = sum(scores) / len(scores)
+    ok = mean >= threshold
+    cmp = "at or above" if ok else "below"
+    headline = (f"{'Passes' if ok else 'Fails'}: {metric} averaged {mean:.2f}, "
+                f"{cmp} the {threshold:.2f} threshold")
+    failing = sorted([(r, s) for r, s in rows if s["score"] < threshold],
+                     key=lambda rs: rs[1]["score"])
+    drivers = []
+    if len(rows) > 1:
+        headline += f" ({len(rows) - len(failing)} of {len(rows)} cases pass)."
+        for r, s in failing[:3]:
+            q = _clip(str(r.get("input") or f"case {r.get('index', 0) + 1}"), 70)
+            drivers.append(f"“{q}” scored {s['score']:.2f}: {_clip(str(s.get('reason') or ''), 180)}")
+        if not failing:
+            lo = min(rows, key=lambda rs: rs[1]["score"])
+            drivers.append(f"Lowest case: “{_clip(str(lo[0].get('input') or ''), 70)}” at {lo[1]['score']:.2f}.")
+        return {"status": "pass" if ok else "fail", "headline": headline, "drivers": drivers}
+
+    # one case: say which claims drove it
+    s = rows[0][1]
+    d = s.get("details") or {}
+    headline += "."
+    claims = d.get("claims") or []
+    if claims:
+        bad = sorted([c for c in claims if c.get("bad", not c.get("supported", True))],
+                     key=lambda c: c.get("p", c.get("p_supported", 0)))
+        what = "contradict the context" if d.get("kind") == "contradiction" else "are not supported by the context"
+        if bad:
+            drivers.append(f"{len(bad)} of {len(claims)} claims {what}. Each one lowers the score:")
+            for c in bad[:4]:
+                p = c.get("p", c.get("p_supported", 0))
+                drivers.append(f"“{_clip(c['claim'], 110)}” (p={p:.2f})")
+            if len(bad) > 4:
+                drivers.append(f"…and {len(bad) - 4} more in the claims table.")
+        else:
+            drivers.append(f"All {len(claims)} claims hold up against the context.")
+        if d.get("not_in_context"):
+            drivers.append(f"{d['not_in_context']} claims aren't in the context at all; "
+                           f"hallucination doesn't count those, faithfulness does.")
+    else:
+        listed = d.get("unsupported_claims") or d.get("contradictions") or d.get("biased") or d.get("toxic") or []
+        if s.get("reason"):
+            drivers.append(_clip(str(s["reason"]), 260))
+        for x in listed[:3]:
+            drivers.append(f"“{_clip(str(x), 110)}”")
+    if not ok and threshold - mean < 0.1:
+        drivers.append(f"It missed the threshold by {threshold - mean:.2f}.")
+    return {"status": "pass" if ok else "fail", "headline": headline, "drivers": drivers}

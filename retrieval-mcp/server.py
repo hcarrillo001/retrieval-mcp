@@ -14,20 +14,30 @@ Tools
   evaluate_case(input, actual_output, ...)    one-off score without a golden set
 """
 from __future__ import annotations
+import json
 import os
+import time
 import statistics
 from typing import List, Optional
 
 from mcp.server.fastmcp import FastMCP, Image
+from mcp.types import CallToolResult, TextContent
 
 import metrics as M
 import history as H
 import charts as C
 from judge import (judge_json, budget_status, reset_spend, BudgetExceeded,
-                   judge_as, sandbox_models, SANDBOX_PRESETS)
+                   judge_as, sandbox_models, SANDBOX_PRESETS,
+                   jev_enabled, jev_ask, jev_map, judge_label, use_judge,
+                   JEV_METRICS)
 from goldensets import load_records
 
+__version__ = "1.0.0"  # keep in step with server.json and the image tag
+
 mcp = FastMCP("retrieval-mcp")
+# FastMCP 1.x has no version argument, so serverInfo reported the SDK version
+# (1.2x.x) instead of ours. The low-level server reads this attribute.
+mcp._mcp_server.version = __version__
 
 # in-memory state for the session
 GOLDEN_SETS: dict[str, list] = {}
@@ -52,6 +62,13 @@ _FIELD_LABEL = {"retrieval_context": "retrieved context", "actual_output": "mode
                 "input": "input"}
 
 
+def _sandbox_judge_name(model_id: str) -> str:
+    p = SANDBOX_PRESETS.get(model_id, {})
+    if p.get("kind") == "jev":
+        return f"{p['model']} + {SANDBOX_PRESETS[p['decomposer']]['model']}"
+    return p.get("model", model_id)
+
+
 def run_sandbox_eval(cases: list, metric: str, model_id: str,
                      threshold: float = 0.7) -> dict:
     """Score raw cases with a chosen FREE judge model. Used by the public
@@ -59,6 +76,11 @@ def run_sandbox_eval(cases: list, metric: str, model_id: str,
     metrics, and the global budget cap still applies."""
     if metric not in SANDBOX_ALLOWED_METRICS:
         return {"error": "metric_not_allowed", "allowed": sorted(SANDBOX_ALLOWED_METRICS)}
+    if SANDBOX_PRESETS.get(model_id, {}).get("kind") == "jev" and metric not in JEV_METRICS:
+        return {"error": "metric_not_supported_by_judge",
+                "message": (f"Jev scores {', '.join(JEV_METRICS[:-1])} and {JEV_METRICS[-1]}. Pick one of those, "
+                            f"or pick another judge for {metric}."),
+                "allowed": list(JEV_METRICS)}
     if not isinstance(cases, list) or not cases:
         return {"error": "no_cases"}
     dropped_cases = len(cases) if len(cases) > SANDBOX_MAX_CASES else 0
@@ -100,6 +122,7 @@ def run_sandbox_eval(cases: list, metric: str, model_id: str,
                     "message": (f"{metric} scores the model output against the {label}, "
                                 f"so it needs a {label} to compare with. "
                                 f"Add one and run again.")}
+    t0 = time.perf_counter()
     try:
         with judge_as(model_id):
             for i, case in enumerate(clean):
@@ -125,10 +148,13 @@ def run_sandbox_eval(cases: list, metric: str, model_id: str,
     aggregate = {metric: {
         "mean_score": round(statistics.mean(scores), 4),
         "pass_rate": round(sum(s >= threshold for s in scores) / len(scores), 4),
-        "n": len(scores)}}
+        "n": len(scores),
+        "verdict": M.explain(metric, full, threshold)}}
     out = {"golden_set": "sandbox", "threshold": threshold,
-           "judge_model": SANDBOX_PRESETS.get(model_id, {}).get("model", model_id),
-           "aggregate": aggregate, "per_case": full, "total_cases": len(full)}
+           "judge_model": _sandbox_judge_name(model_id),
+           "aggregate": aggregate, "per_case": full, "total_cases": len(full),
+           # wall-clock judge time, so the page can show Jev vs LLM side by side
+           "elapsed_ms": int((time.perf_counter() - t0) * 1000)}
     notes = []
     if truncated:
         notes.append(f"Shortened to {SANDBOX_MAX_CHARS} chars: "
@@ -158,132 +184,195 @@ def _dashboard_link(run_id: str) -> str:
     return f"{base}/dashboard{q}"
 
 
+def _report_link(run_id: str) -> str:
+    """Link to the report page for a saved run: the same view the sandbox shows
+    after a run (score, why it passed or failed, claims, highlighted output).
+    Works in any client, because it is just a link."""
+    base = os.environ.get("RETRIEVAL_DASHBOARD_URL", "").rstrip("/")
+    if not base or not run_id:
+        return ""
+    key = os.environ.get("DASH_TOKEN", "")
+    return f"{base}/report?run={run_id}" + (f"&key={key}" if key else "")
+
+
 # ---------------------------------------------------------------------------
 # MCP Apps widget (experimental)
 #
 # Clients that implement the MCP Apps extension render this HTML inline in the
 # conversation; clients that don't just ignore the _meta hint and show the text
-# result as before. Deliberately one small self-contained file: no external CSS,
-# no fonts, no scripts beyond the inline reader, because it runs in a sandboxed
-# iframe with no network.
+# result as before. Self-contained: the shared report renderer and its styles
+# are inlined, because the widget runs in a sandboxed iframe with no network.
 # ---------------------------------------------------------------------------
 
-SCORES_WIDGET_URI = "ui://retrieval-mcp/scores/v2"
+SCORES_WIDGET_URI = "ui://retrieval-mcp/scores/v4"
 
-_SCORES_HTML = """<!doctype html>
-<meta charset="utf-8">
+# The widget is the same report the sandbox and /report show, rendered by the
+# shared web/report.js + web/report.css. They are inlined here because the
+# widget iframe has no network. (.dockerignore re-includes those two files.)
+_WEB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
+
+
+def _read_web(name: str) -> str:
+    try:
+        with open(os.path.join(_WEB, name), encoding="utf-8") as f:
+            return f.read()
+    except OSError:
+        return ""
+
+
+_WIDGET_SHELL = """<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-  :root { color-scheme: light dark; }
-  body { margin:0; padding:14px 16px; font:14px/1.5 -apple-system,BlinkMacSystemFont,
-         "Segoe UI",Roboto,sans-serif; color:#18181B; background:transparent; }
-  @media (prefers-color-scheme: dark) { body { color:#E4E4E7; } }
-  .hd { font-size:12.5px; opacity:.65; margin-bottom:12px; }
-  .row { display:flex; align-items:center; gap:10px; margin-bottom:9px; }
-  .nm { flex:0 0 150px; font-size:12.5px; font-family:ui-monospace,SFMono-Regular,
-        Menlo,monospace; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .track { flex:1; height:9px; border-radius:99px; background:rgba(128,128,128,.18);
-           position:relative; overflow:hidden; min-width:60px; }
-  .fill { position:absolute; inset:0 auto 0 0; border-radius:99px; }
-  .thr { position:absolute; top:-3px; bottom:-3px; width:2px; background:currentColor;
-         opacity:.35; }
-  .v { flex:0 0 34px; text-align:right; font-size:12.5px; font-variant-numeric:tabular-nums;
-       font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
-  .pill { flex:0 0 auto; font-size:10px; font-weight:700; letter-spacing:.03em;
-          padding:3px 8px; border-radius:6px; font-family:ui-monospace,monospace; }
-  .pass { background:rgba(5,150,105,.15); color:#059669; }
-  .fail { background:rgba(225,29,72,.15); color:#E11D48; }
-  .ft { font-size:11.5px; opacity:.6; margin-top:12px; }
-  .ft a { color:inherit; }
-</style>
-<div id="root">Loading…</div>
+  :root { color-scheme: light; }
+  html, body { margin:0; padding:0; background:transparent; }
+  body { padding:2px; }
+  .rr-card { border-radius:12px; }
+  .rr-score .big { font-size:56px; }
+  .wmsg { font:14px/1.5 system-ui,sans-serif; color:#5F6068; padding:14px 16px; }
+  .wmsg b { color:#0B0B0F; }
+__RR_CSS__
+</style></head>
+<body>
+<div id="root"><div class="wmsg">Loading the report…</div></div>
 <script>
-  // Hosts deliver the tool result in different ways and at different times, so
-  // rather than betting on one channel, poll every known source until one
-  // yields data. ChatGPT's Apps SDK sets window.openai.toolOutput and fires
-  // openai:set_globals; other hosts inject window.mcpData or postMessage. A
-  // widget that listens for only one of those sits on "Loading..." forever.
-  var painted = false;
+__RR_JS__
+</script>
+<script>
+(function () {
+  // How a tool result reaches this iframe depends on the host:
+  //  * MCP Apps hosts (Claude, VS Code, ChatGPT for text/html;profile=mcp-app)
+  //    send NOTHING until the view sends ui/initialize and then
+  //    ui/notifications/initialized. The result then arrives as
+  //    ui/notifications/tool-result, a CallToolResult: params.structuredContent.
+  //  * ChatGPT's Apps SDK (openai/outputTemplate) sets window.openai.toolOutput.
+  // Every step is guarded: an error must show on screen, never a silent hang.
+  var root = document.getElementById("root");
+  var painted = false, nextId = 1, log = [];
+  function note(s) { log.push(s); }
+  function fail(where, e) { note(where + ": " + (e && e.message ? e.message : String(e))); }
+  function post(msg) { try { window.parent.postMessage(msg, "*"); } catch (e) { fail("postMessage", e); } }
+  function request(method, params) { var id = nextId++; post({ jsonrpc: "2.0", id: id, method: method, params: params || {} }); return id; }
+  function notify(method, params) { post({ jsonrpc: "2.0", method: method, params: params || {} }); }
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
 
-  function source() {
-    if (window.openai && window.openai.toolOutput) return window.openai.toolOutput;
-    if (window.mcpData) return window.mcpData;
-    if (window.toolOutput) return window.toolOutput;
+  function unwrap(d) {
+    if (!d) return null;
+    if (typeof d === "string") { try { d = JSON.parse(d); } catch (e) { return null; } }
+    if (typeof d !== "object") return null;
+    if (d.aggregate || d.error) return d;
+    if (d.params) return unwrap(d.params);
+    if (d.structuredContent) return unwrap(d.structuredContent);
+    if (d.result) return unwrap(d.result);
+    if (d.toolOutput) return unwrap(d.toolOutput);
+    if (d.mcpData) return unwrap(d.mcpData);
+    if (Array.isArray(d.content)) {
+      for (var i = 0; i < d.content.length; i++) {
+        var c = d.content[i];
+        if (c && c.type === "text") { var u = unwrap(c.text); if (u) return u; }
+      }
+    }
     return null;
   }
 
-  function paint(data) {
-    if (painted || !data) return;
-    if (typeof data === "string") { try { data = JSON.parse(data); } catch (e) { return; } }
-    // some hosts wrap the payload
-    if (data.structuredContent) data = data.structuredContent;
-    if (data.result && data.result.structuredContent) data = data.result.structuredContent;
-
-    var agg = data.aggregate || {};
-    var names = Object.keys(agg);
-    if (!names.length) return;
-    painted = true;
-
-    var thr = typeof data.threshold === "number" ? data.threshold : 0.7;
-    var failing = names.filter(function (m) {
-      var v = (agg[m] || {}).mean_score; return v == null || v < thr;
-    }).length;
-    var n = data.total_cases != null ? data.total_cases : data.cases;
-
-    var html = '<div class="hd">' + names.length + " metric" + (names.length === 1 ? "" : "s")
-      + (n == null ? "" : " on " + n + " case" + (n === 1 ? "" : "s"))
-      + (failing ? " \u00b7 " + failing + " failing" : " \u00b7 all pass") + "</div>";
-
-    names.forEach(function (m) {
-      var sc = (agg[m] || {}).mean_score;
-      var ok = sc != null && sc >= thr;
-      var pct = Math.max(2, Math.round((sc || 0) * 100));
-      var col = sc == null ? "#A1A1AA" : (ok ? "#059669" : (sc >= 0.4 ? "#D97706" : "#E11D48"));
-      html += '<div class="row">'
-        + '<span class="nm" title="' + m + '">' + m + "</span>"
-        + '<span class="track"><span class="fill" style="width:' + pct + "%;background:" + col + '"></span>'
-        + '<span class="thr" style="left:' + Math.round(thr * 100) + '%"></span></span>'
-        + '<span class="v">' + (sc == null ? "\u2014" : Number(sc).toFixed(2).replace(/^0/, "")) + "</span>"
-        + '<span class="pill ' + (ok ? "pass" : "fail") + '">' + (ok ? "PASS" : "FAIL") + "</span>"
-        + "</div>";
-    });
-
-    html += '<div class="ft">threshold ' + thr.toFixed(2)
-      + (data.view_url ? ' \u00b7 <a href="' + data.view_url + '" target="_blank">open the full run</a>' : "")
-      + "</div>";
-    document.getElementById("root").innerHTML = html;
+  var lastH = 0;
+  function sendSize() {
+    var h = Math.ceil(document.documentElement.scrollHeight);
+    if (Math.abs(h - lastH) < 2) return;
+    lastH = h;
+    notify("ui/notifications/size-changed", { width: document.documentElement.scrollWidth, height: h });
+  }
+  function openLink(url) {
+    // MCP Apps: ask the host; ChatGPT: its own API; else a plain new tab
+    try { request("ui/open-link", { url: url }); } catch (e) {}
+    try { if (window.openai && window.openai.openExternal) { window.openai.openExternal({ href: url }); return; } } catch (e) {}
+    try { window.open(url, "_blank", "noopener"); } catch (e) {}
   }
 
-  function tryPaint() { paint(source()); }
+  function paint(raw, via) {
+    if (painted) return;
+    var data = unwrap(raw);
+    if (!data) return;
+    painted = true;
+    root.setAttribute("data-via", via || "");
+    if (data.error && !data.aggregate) {
+      root.innerHTML = '<div class="wmsg"><b>The eval did not run.</b> ' + esc(data.message || data.error) + "</div>";
+      sendSize(); return;
+    }
+    var link = data.report_url || data.view_url;
+    var footer = link ? '<div class="rr-foot"><span class="l">Every claim, the highlighted answer, all cases</span><span class="sp"></span>' +
+      '<a class="rr-btn dark" href="' + esc(link) + '" target="_blank" rel="noopener">Open the full report</a></div>' : "";
+    if (window.RetrievalReport) {
+      // compact in chat: scores, and where it failed; the full report is the link
+      window.RetrievalReport.mount(root, data, { compact: true, footer: footer, openLink: openLink, onChange: function () { setTimeout(sendSize, 30); } });
+    } else {
+      root.innerHTML = '<div class="wmsg">Scores are in the reply below.' + (link ? ' <a href="' + esc(link) + '" target="_blank" rel="noopener">Open the full report</a>' : "") + "</div>";
+    }
+    sendSize();
+    try { new ResizeObserver(sendSize).observe(document.body); } catch (e) {}
+  }
 
-  // every channel, plus a short poll for hosts that populate the global late
-  tryPaint();
+  function tryGlobals() {
+    try {
+      if (window.openai && window.openai.toolOutput) paint(window.openai.toolOutput, "window.openai");
+      else if (window.mcpData) paint(window.mcpData, "window.mcpData");
+      else if (window.toolOutput) paint(window.toolOutput, "window.toolOutput");
+    } catch (e) { fail("globals", e); }
+  }
+
+  var initId = null;
   window.addEventListener("message", function (e) {
-    var d = e.data || {};
-    paint(d.mcpData || d.toolOutput || d.data || d);
+    try {
+      var d = e.data;
+      if (typeof d === "string") { try { d = JSON.parse(d); } catch (x) { return; } }
+      if (!d || typeof d !== "object") return;
+      if (d.method) note("got " + d.method);
+      else if (d.id != null) note("got response #" + d.id + (d.error ? " (error)" : ""));
+      if (d.id != null && d.id === initId && !d.method) { notify("ui/notifications/initialized", {}); return; }
+      if (d.method === "ui/notifications/tool-result") { paint(d.params, "tool-result"); return; }
+      if (d.method === "ui/resource-teardown" && d.id != null) { post({ jsonrpc: "2.0", id: d.id, result: {} }); return; }
+      if (d.method && d.method.indexOf("ui/") === 0) return;
+      if (d.jsonrpc) return;  // replies to our own requests (open-link, ...)
+      paint(d, "message");
+    } catch (err) { fail("message", err); }
   });
-  window.addEventListener("openai:set_globals", tryPaint);
-  document.addEventListener("DOMContentLoaded", tryPaint);
+  window.addEventListener("openai:set_globals", tryGlobals);
+
+  try {
+    initId = request("ui/initialize", {
+      protocolVersion: "2026-01-26", capabilities: {},
+      clientInfo: { name: "retrieval-report", version: "4.0.0" }, appCapabilities: {}
+    });
+  } catch (e) { fail("initialize", e); }
+  tryGlobals();
 
   var tries = 0;
   var poll = setInterval(function () {
-    tryPaint();
+    tryGlobals();
     if (painted || ++tries > 40) {
       clearInterval(poll);
-      // Say what actually arrived instead of spinning forever: a widget stuck on
-      // "Loading..." tells you nothing about which channel the host used.
-      if (!painted) {
-        var keys = [];
-        if (window.openai) keys.push("window.openai(" + Object.keys(window.openai).join(",") + ")");
-        if (window.mcpData) keys.push("window.mcpData");
-        if (window.toolOutput) keys.push("window.toolOutput");
-        document.getElementById("root").innerHTML =
-          '<div class="hd">No tool result reached this widget.</div>'
-          + '<div class="ft">available: ' + (keys.length ? keys.join(" \u00b7 ") : "nothing") + "</div>";
-      }
+      if (painted) return;
+      var seen = [];
+      try { if (window.openai) seen.push("window.openai"); } catch (e) { seen.push("window.openai(unreadable)"); }
+      try { if (window.parent === window) seen.push("not in an iframe"); } catch (e) {}
+      root.innerHTML = '<div class="wmsg"><b>No tool result reached this widget.</b><br>' +
+        esc(seen.concat(log).join(" \\u00b7 ") || "no messages from the host") + "</div>";
+      sendSize();
     }
   }, 250);
+})();
 </script>
+</body></html>
 """
+
+
+def _widget_html() -> str:
+    css = _read_web("report.css")
+    js = _read_web("report.js").replace("</script", "<\\/script")
+    return _WIDGET_SHELL.replace("__RR_CSS__", css).replace("__RR_JS__", js)
+
+
+_SCORES_HTML = _widget_html()
 
 
 @mcp.resource(SCORES_WIDGET_URI, mime_type="text/html;profile=mcp-app")
@@ -292,10 +381,26 @@ def scores_widget() -> str:
     return _SCORES_HTML
 
 
+# ChatGPT's Apps SDK path keys off openai/outputTemplate and expects the
+# text/html+skybridge mime type. Same HTML: the script handles both hosts.
+SCORES_WIDGET_SKYBRIDGE_URI = "ui://retrieval-mcp/scores/v4-skybridge.html"
+
+
+@mcp.resource(SCORES_WIDGET_SKYBRIDGE_URI, mime_type="text/html+skybridge")
+def scores_widget_skybridge() -> str:
+    """Same score bars, served under the ChatGPT Apps SDK mime type."""
+    return _SCORES_HTML
+
+
 def _widget_meta() -> dict:
     """The _meta hint that tells a client this tool has a UI. Clients without
-    MCP Apps ignore it, so attaching it costs nothing."""
-    return {"ui": {"resourceUri": SCORES_WIDGET_URI, "preferredSize": {"height": 240}}}
+    MCP Apps ignore it, so attaching it costs nothing. The flat "ui/resourceUri"
+    key is the deprecated spelling some hosts still read; openai/* is ChatGPT."""
+    return {"ui": {"resourceUri": SCORES_WIDGET_URI},
+            "ui/resourceUri": SCORES_WIDGET_URI,
+            "openai/outputTemplate": SCORES_WIDGET_SKYBRIDGE_URI,
+            "openai/toolInvocation/invoking": "Scoring…",
+            "openai/toolInvocation/invoked": "Scored"}
 
 
 def _dashboard_home(view: str = "") -> str:
@@ -332,11 +437,6 @@ def _save_inline(case: dict, results: dict, threshold: float,
     filterable (and out of the way of real regression runs) while still giving
     every response somewhere to point.
     """
-    aggregate = {
-        m: {"mean_score": r.get("score"),
-            "pass_rate": 1.0 if r.get("success") else 0.0, "n": 1}
-        for m, r in results.items()
-    }
     per_case = [{"index": 0,
                  "input": case.get("input", ""),
                  "actual_output": case.get("actual_output", ""),
@@ -345,6 +445,12 @@ def _save_inline(case: dict, results: dict, threshold: float,
                  "scores": results,
                  "min_score": min([r.get("score") or 0 for r in results.values()],
                                   default=0)}]
+    aggregate = {
+        m: {"mean_score": r.get("score"),
+            "pass_rate": 1.0 if r.get("success") else 0.0, "n": 1,
+            "verdict": M.explain(m, per_case, threshold)}
+        for m, r in results.items()
+    }
     return H.save_run(golden_set, threshold, aggregate, "", per_case=per_case,
                       judge_model=judge_model)
 
@@ -358,6 +464,8 @@ def _run_metric(name: str, case: dict, threshold: float) -> dict:
             f"Metric '{name}' needs {', '.join(missing)} — not supplied for this case. "
             f"No score was produced (this is a missing input, not a failing result)."
         )
+    if name in M.JEV and jev_enabled():
+        return M.JEV[name](case, judge_json, jev_ask, jev_map, threshold=threshold)
     if name in M.BUILTIN:
         return M.BUILTIN[name](case, judge_json, threshold=threshold)
     if name in CUSTOM_METRICS:
@@ -371,6 +479,8 @@ def list_metrics() -> dict:
     return {
         "builtin": sorted(M.BUILTIN.keys()),
         "custom": sorted(CUSTOM_METRICS.keys()),
+        "judge": judge_label(),
+        "scored_by_jev": sorted(M.JEV.keys()) if jev_enabled() else [],
         "notes": "faithfulness/contextual_* need retrieval_context; "
                  "hallucination needs context; answer_relevancy needs input+actual_output.",
     }
@@ -409,7 +519,8 @@ def author_metric(name: str, criteria: str, examples: Optional[List[str]] = None
 def run_eval(metrics: List[str], golden_set: str = "", cases: str = "",
              threshold: float = 0.7,
              outputs: Optional[List[str]] = None, label: str = "",
-             limit: int = 3, generator_model: str = "", judge_model: str = "") -> dict:
+             limit: int = 3, generator_model: str = "", judge_model: str = "",
+             judge: str = "") -> CallToolResult:
     """Run metrics over a set of cases. Pass `cases` with the data inline (JSON,
     JSONL, CSV or TSV text, or a file path) to score in a single call — nothing is
     stored server-side and no prior load is needed. Or pass `golden_set` to reuse a
@@ -422,11 +533,25 @@ def run_eval(metrics: List[str], golden_set: str = "", cases: str = "",
     Pass `generator_model` (which LLM produced the outputs) and `judge_model` (which
     LLM scored them) so the dashboard can compare across models; judge_model defaults
     to the configured judge. The run is saved to history (file or Supabase).
-    IMPORTANT FOR CALLERS: the reply includes `view_url`, a link to the full
-    visual report. ALWAYS include that link in your response to the user, even
-    when you summarise everything else. `summary_md` is a ready-to-render
-    markdown block (score table + link) that can be shown verbatim.
+    IMPORTANT FOR CALLERS: the reply includes `report_url` (the full visual
+    report: score, why it passed or failed, every claim, the answer with its
+    problem passages highlighted) and `view_url` (the dashboard). ALWAYS include
+    `report_url` in your response to the user, even when you summarise
+    everything else. `aggregate[metric].verdict` says in words why each metric
+    passed or failed (`headline` + `drivers`); explain the result from it rather
+    than only quoting the number. `summary_md` is a ready-to-render markdown
+    block (report link, score table, verdict) that can be shown verbatim.
+    Pass `judge="jev"` to score faithfulness, answer_relevancy and hallucination with Jev
+    (per-claim probabilities, TypeSafe AI), `judge="llm"` for the LLM judge
+    only, or leave it empty for the server default.
     Raises if the spend cap is hit mid-run; partial spend is still metered."""
+    with use_judge(judge):
+        return _run_eval(metrics, golden_set, cases, threshold, outputs, label,
+                         limit, generator_model, judge_model)
+
+
+def _run_eval(metrics, golden_set, cases, threshold, outputs, label, limit,
+              generator_model, judge_model) -> CallToolResult:
     # inline data wins: it is self-contained and needs no server-side state
     if cases:
         case_list = load_records(cases)
@@ -444,7 +569,7 @@ def run_eval(metrics: List[str], golden_set: str = "", cases: str = "",
         set_name = golden_set
     else:
         raise ValueError("Pass either `cases` (the data inline) or `golden_set`.")
-    judge_model = judge_model or os.environ.get("RETRIEVAL_JUDGE_MODEL", "claude-sonnet-4-6")
+    judge_model = judge_model or judge_label()
     cases = case_list
     golden_set = set_name
     if outputs is not None:
@@ -468,13 +593,15 @@ def run_eval(metrics: List[str], golden_set: str = "", cases: str = "",
                 row["min_score"] = min(row["min_score"], res["score"])
             full.append(row)
     except BudgetExceeded as e:
-        return {"error": "budget_exceeded", "message": str(e),
-                "cases_scored": len(full), "budget": budget_status()}
+        return _structured({"error": "budget_exceeded", "message": str(e),
+                            "cases_scored": len(full), "budget": budget_status()})
 
     aggregate = {
         m: {"mean_score": round(statistics.mean(s), 4),
             "pass_rate": round(sum(x >= threshold for x in s) / len(s), 4),
-            "n": len(s)}
+            "n": len(s),
+            # why it passed or failed; saved with the run so the report page has it
+            "verdict": M.explain(m, full, threshold)}
         for m, s in scores.items() if s
     }
     run_id = H.save_run(golden_set, threshold, aggregate, label, per_case=full,
@@ -492,11 +619,27 @@ def run_eval(metrics: List[str], golden_set: str = "", cases: str = "",
     link = _dashboard_link(run_id)
     if link:
         out["view_url"] = link
-    out["summary_md"] = _summary_md(aggregate, threshold, len(full), link)
-    return out
+    report = _report_link(run_id)
+    if report:
+        out["report_url"] = report
+    out["summary_md"] = _summary_md(aggregate, threshold, len(full), link, report)
+    return _structured(out)
 
 
-def _summary_md(aggregate: dict, threshold: float, n_cases: int, link: str) -> str:
+def _structured(out: dict) -> CallToolResult:
+    """Return `out` both as JSON text (what the model reads, same as before) and
+    as top-level structuredContent (what widgets read: MCP Apps hosts forward it
+    in ui/notifications/tool-result, ChatGPT exposes it as window.openai.toolOutput).
+    A plain `-> dict` return gave no structuredContent at all, and `-> Dict[str, Any]`
+    nests it under "result", so the widget never saw `aggregate`."""
+    return CallToolResult(
+        content=[TextContent(type="text", text=json.dumps(out, indent=2, default=str))],
+        structuredContent=out,
+    )
+
+
+def _summary_md(aggregate: dict, threshold: float, n_cases: int, link: str,
+                report: str = "") -> str:
     """A compact markdown block the client can render as-is.
 
     We cannot style the client's UI, so the lever we do have is returning
@@ -513,9 +656,17 @@ def _summary_md(aggregate: dict, threshold: float, n_cases: int, link: str) -> s
     table = ("| metric | score | verdict | passed |\n"
              "|---|---|---|---|\n" + "\n".join(lines))
     out = []
-    if link:
+    if report:
+        out.append(_link_line(report, "Open the full report"))
+    elif link:
         out.append(_link_line(link, "View this run in the dashboard"))
     out += [table, f"\n_threshold {threshold:.2f}_"]
+    # the verdict in words, so the reply can say WHY and not just the number
+    for m, a in aggregate.items():
+        v = a.get("verdict") or {}
+        if v.get("headline"):
+            out.append(f"\n**{m}.** {v['headline']}")
+            out += [f"- {d}" for d in v.get("drivers", [])[:5]]
     return "\n".join(out)
 
 
@@ -559,23 +710,38 @@ def reset_budget() -> dict:
 def evaluate_case(input: str, actual_output: str, metrics: List[str],
                   expected_output: str = "", context: Optional[List[str]] = None,
                   retrieval_context: Optional[List[str]] = None,
-                  threshold: float = 0.7, save: bool = True) -> dict:
+                  threshold: float = 0.7, save: bool = True, judge: str = "") -> dict:
     """Score a single output inline, without loading a golden set. The result is
     saved as a one-case run (golden set "inline") so it has a dashboard link;
-    pass save=False to score without recording it."""
+    pass save=False to score without recording it. `judge` works as in run_eval:
+    "jev", "llm", or empty for the server default."""
+    with use_judge(judge):
+        return _evaluate_case(input, actual_output, metrics, expected_output,
+                              context, retrieval_context, threshold, save)
+
+
+def _evaluate_case(input, actual_output, metrics, expected_output, context,
+                   retrieval_context, threshold, save) -> dict:
     case = {"input": input, "actual_output": actual_output,
             "expected_output": expected_output,
             "context": context or [], "retrieval_context": retrieval_context or []}
     results = {m: _run_metric(m, case, threshold) for m in metrics}
-    out = {"scores": results}
+    row = [{"index": 0, "input": case["input"], "scores": results}]
+    out = {"scores": results,
+           "verdict": {m: M.explain(m, row, threshold) for m in results}}
     if save:
         try:
-            run_id = _save_inline(case, results, threshold, "inline")
+            run_id = _save_inline(case, results, threshold, "inline",
+                                  judge_model=judge_label())
             link = _dashboard_link(run_id)
             out["run_id"] = run_id
             if link:
                 out["view_url"] = link
                 out["summary_md"] = _link_line(link, "View this result in the dashboard")
+            report = _report_link(run_id)
+            if report:
+                out["report_url"] = report
+                out["summary_md"] = _link_line(report, "Open the full report")
         except Exception as e:
             # scoring succeeded; only the permalink is missing
             out["save_error"] = f"Scored, but the run was not saved: {e}"

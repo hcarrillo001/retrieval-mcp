@@ -2,7 +2,8 @@
 Judge backend for RetriEval, with a hard spend cap.
 
 Backends (swap via env):
-    RETRIEVAL_JUDGE_BACKEND   "anthropic" (default) | "ollama"
+    RETRIEVAL_JUDGE_BACKEND   "anthropic" (default) | "ollama" | "openai" | "jev"
+                              (jev: see the Jev section below)
     RETRIEVAL_JUDGE_MODEL     e.g. "claude-sonnet-4-6" or "deepseek-r1:70b"
     OLLAMA_URL                default "http://localhost:11434/api/chat"
 
@@ -60,6 +61,15 @@ SANDBOX_PRESETS = {
         "key_env": "GROQ_API_KEY",
         "model": _model("GROQ_MODEL", "openai/gpt-oss-120b"),
     },
+    # Jev scores claims; the LLM preset named in "decomposer" splits the answer
+    # into claims. Listed in the picker only once TYPESAFE_API_KEY is set.
+    "jev": {
+        "label": os.environ.get("JEV_LABEL") or "Jev \u00b7 TypeSafe (experimental)",
+        "kind": "jev",
+        "key_env": "TYPESAFE_API_KEY",
+        "decomposer": "groq-llama",
+        "model": os.environ.get("JEV_MODEL", "jev-latest"),
+    },
     # Other providers (Gemini, OpenRouter/Qwen, OpenRouter/DeepSeek, Ollama Cloud)
     # were removed while their free model ids are unverified — a dead option in a
     # public picker is worse than a short list. To restore one, add a block here
@@ -67,17 +77,31 @@ SANDBOX_PRESETS = {
 }
 DEFAULT_SANDBOX_MODEL = os.environ.get("SANDBOX_DEFAULT_MODEL", "groq-llama")
 
-# per-call override: {"base_url","key","model"} set for the duration of one eval
+# per-call override: {"base_url","key","model"[,"jev"]} set for one sandbox eval
 _override: "contextvars.ContextVar[dict|None]" = contextvars.ContextVar(
     "judge_override", default=None)
+# per-call Jev switch from the MCP tools' `judge` argument: None = server default
+_jev_mode: "contextvars.ContextVar[bool|None]" = contextvars.ContextVar(
+    "jev_mode", default=None)
+
+# metrics Jev can score (mirrors metrics.JEV; judge.py never imports metrics.py)
+JEV_METRICS = ("answer_relevancy", "faithfulness", "hallucination")
 
 
 def sandbox_models() -> list[dict]:
     """Public list of selectable models (id + label only — no keys/urls)."""
     out = []
     for mid, p in SANDBOX_PRESETS.items():
-        out.append({"id": mid, "label": p["label"],
-                    "available": bool(os.environ.get(p["key_env"], ""))})
+        ok = bool(os.environ.get(p["key_env"], ""))
+        if p.get("kind") == "jev":
+            if not ok:
+                continue  # the picker shows every entry; never list a dead one
+            d = SANDBOX_PRESETS[p["decomposer"]]
+            ok = bool(os.environ.get(d["key_env"], ""))
+            out.append({"id": mid, "label": p["label"], "available": ok,
+                        "metrics": list(JEV_METRICS)})
+            continue
+        out.append({"id": mid, "label": p["label"], "available": ok})
     return out
 
 
@@ -98,6 +122,17 @@ class judge_as:
         if not key:
             raise RuntimeError(f"model '{self.model_id}' not configured "
                                f"(missing {p['key_env']})")
+        if p.get("kind") == "jev":
+            # Jev reads TYPESAFE_API_KEY itself; the override carries the LLM
+            # that splits answers into claims, plus the flag that turns Jev on
+            d = SANDBOX_PRESETS[p["decomposer"]]
+            dkey = os.environ.get(d["key_env"], "")
+            if not dkey:
+                raise RuntimeError(f"model '{self.model_id}' needs {d['key_env']} "
+                                   f"for splitting answers into claims")
+            self._token = _override.set({"base_url": d["base_url"], "key": dkey,
+                                         "model": d["model"], "jev": True})
+            return self
         self._token = _override.set(
             {"base_url": p["base_url"], "key": key, "model": p["model"]})
         return self
@@ -280,12 +315,142 @@ def _openai(system: str, user: str, max_tokens: int = 1024) -> str:
         raise RuntimeError(f"judge HTTP {e.code} from {base}: {detail or e.reason}") from None
 
 
+# ---- Jev (TypeSafe AI) decision model ---------------------------------------
+# Jev is not a text judge: it answers typed questions (Noul / Choice / Score)
+# with numbers and no reasons. So it cannot sit behind the (system, user) -> str
+# shape the rubrics use. Instead it gets its own entry point, jev_ask(), and the
+# jev-aware metrics in metrics.py receive it as a callable next to jj. An LLM is
+# still needed for the steps Jev cannot do (splitting an answer into claims, and
+# every metric without a jev path); that LLM is RETRIEVAL_DECOMPOSER_BACKEND.
+#
+#   RETRIEVAL_JUDGE_BACKEND=jev
+#   TYPESAFE_API_KEY              required
+#   JEV_MODEL                     default "jev-latest"
+#   TYPESAFE_URL                  default https://api.typesafe.ai/v1/systemone
+#   RETRIEVAL_DECOMPOSER_BACKEND  anthropic (default) | ollama | openai
+#   JEV_PRICE_IN                  $/1M input tokens, default 0.042 (output free)
+#   JEV_MAX_WORKERS               parallel Jev calls per metric, default 8
+
+JEV_DEFAULT_URL = "https://api.typesafe.ai/v1/systemone"
+
+
+def _backend_name() -> str:
+    return (os.environ.get("RETRIEVAL_JUDGE_BACKEND")
+            or os.environ.get("TOUCHSTONE_JUDGE_BACKEND", "anthropic")).lower()
+
+
+def jev_enabled() -> bool:
+    """True when Jev should score the metrics that have a jev path.
+    Precedence: sandbox preset, then the tool call's `judge` argument, then
+    RETRIEVAL_JUDGE_BACKEND."""
+    ov = _override.get()
+    if ov:
+        return bool(ov.get("jev"))
+    mode = _jev_mode.get()
+    if mode is not None:
+        return mode
+    return _backend_name() == "jev"
+
+
+class use_judge:
+    """Context manager for the MCP tools' `judge` argument:
+        "" / "default"  whatever RETRIEVAL_JUDGE_BACKEND says
+        "jev"           Jev for faithfulness + answer_relevancy, LLM for the rest
+        "llm"           the LLM judge only, even when the server default is jev"""
+    def __init__(self, judge: str = ""):
+        j = (judge or "default").strip().lower()
+        if j not in ("default", "jev", "llm"):
+            raise ValueError(f"judge must be 'jev', 'llm' or '' (got '{judge}')")
+        if j == "jev" and not os.environ.get("TYPESAFE_API_KEY"):
+            raise RuntimeError("judge='jev' needs TYPESAFE_API_KEY on the server.")
+        self.mode = {"default": None, "jev": True, "llm": False}[j]
+        self._token = None
+
+    def __enter__(self):
+        self._token = _jev_mode.set(self.mode)
+        return self
+
+    def __exit__(self, *exc):
+        _jev_mode.reset(self._token)
+        return False
+
+
+def jev_ask(state, questions: dict) -> dict:
+    """One System One call. `state` is a string, object or list; `questions`
+    is the raw API shape, e.g. {"supported": {"type": "noul", "instructions": "..."}}.
+    Returns the `answers` object keyed by question name. Spend is metered on
+    input tokens (output is free) and counts against RETRIEVAL_BUDGET_USD."""
+    import urllib.request
+    import urllib.error
+
+    _check_budget()
+    key = (os.environ.get("TYPESAFE_API_KEY") or "").strip()
+    if key.lower().startswith("bearer "):
+        key = key[7:].strip()
+    if not key:
+        raise RuntimeError("RETRIEVAL_JUDGE_BACKEND=jev needs TYPESAFE_API_KEY.")
+    url = os.environ.get("TYPESAFE_URL", JEV_DEFAULT_URL)
+    payload = {"state": state, "model": os.environ.get("JEV_MODEL", "jev-latest"),
+               "questions": questions}
+    req = urllib.request.Request(
+        url, data=json.dumps(payload).encode(),
+        headers={"Content-Type": "application/json",
+                 "Authorization": f"Bearer {key}",
+                 "User-Agent": "retriEVAL/1.0 (+https://retrieval-mcp.com)",
+                 "Accept": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=60) as r:
+            body = json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        try:
+            detail = e.read().decode("utf-8", "replace")[:400]
+        except Exception:
+            detail = ""
+        if e.code in (401, 403):
+            raise RuntimeError("Jev rejected the API key (check TYPESAFE_API_KEY).") from None
+        if e.code == 429:
+            raise RuntimeError("Jev rate limit hit; retry shortly or lower "
+                               "JEV_MAX_WORKERS.") from None
+        raise RuntimeError(f"Jev HTTP {e.code}: {detail or e.reason}") from None
+    usage = body.get("usage") or {}
+    price_in = float(os.environ.get("JEV_PRICE_IN", "0.042"))
+    _add_spend((usage.get("input_tokens", 0) or 0) / 1e6 * price_in)
+    answers = body.get("answers")
+    if not isinstance(answers, dict):
+        raise RuntimeError(f"Jev returned no answers: {str(body)[:300]}")
+    return answers
+
+
+def jev_map(fn, items: list) -> list:
+    """Run fn over items in parallel (a Jev call is 70-500 ms, so ten claims
+    done serially take seconds; in parallel it is about one round trip).
+    Order is preserved and the first exception propagates."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    if not items:
+        return []
+    workers = max(1, min(len(items), int(os.environ.get("JEV_MAX_WORKERS", "8"))))
+    with ThreadPoolExecutor(max_workers=workers) as ex:
+        return list(ex.map(fn, items))
+
+
+def judge_label() -> str:
+    """Name of whatever is actually scoring, recorded with each run."""
+    llm = os.environ.get("RETRIEVAL_JUDGE_MODEL", "claude-sonnet-4-6")
+    if jev_enabled():
+        return f"{os.environ.get('JEV_MODEL', 'jev-latest')} + {llm}"
+    return llm
+
+
 def get_judge():
     # an active sandbox override always routes through the OpenAI-compatible path
     if _override.get():
         return _openai
-    backend = (os.environ.get("RETRIEVAL_JUDGE_BACKEND")
-               or os.environ.get("TOUCHSTONE_JUDGE_BACKEND", "anthropic")).lower()
+    backend = _backend_name()
+    if backend == "jev":
+        # the text LLM that splits answers into claims and runs every metric
+        # that has no jev path
+        backend = os.environ.get("RETRIEVAL_DECOMPOSER_BACKEND", "anthropic").lower()
     return {"ollama": _ollama, "openai": _openai}.get(backend, _anthropic)
 
 

@@ -14,6 +14,96 @@
 //     ip text, day date, count int default 0, primary key (ip, day));
 
 const SAMPLES = {
+  // Jev showcase: one long policy, one answer with 25+ claims, nine of them
+  // plausible but ungrounded. An LLM judge has to reason through every claim in a
+  // single long reply; Jev checks each claim in parallel. Claims are kept mostly
+  // non-numeric on purpose (Jev is documented as weak on numbers and dates).
+  jev: {
+    metric: "faithfulness",
+    cases: [{
+      input: "I'm flying to a client site in Chicago next month for a three-day workshop, " +
+        "and my spouse is joining me for the weekend after. Walk me through everything: " +
+        "booking, approvals, what's covered, what isn't, and how I get reimbursed.",
+      retrieval_context: [
+        "Travel policy, section 1: booking and approval. All business travel must be " +
+        "booked through the company travel portal; tickets bought directly from an " +
+        "airline or a third-party site are not reimbursed. Every trip needs the " +
+        "traveller's manager to approve it in the portal before anything is booked. " +
+        "International trips additionally need approval from a vice president. " +
+        "Domestic flights are booked in economy class. Business class is never " +
+        "permitted on domestic flights, regardless of schedule or meeting times. " +
+        "Travellers should stay at one of the preferred partner hotels listed in the " +
+        "portal; if none is available near the work location, any mid-range hotel is " +
+        "acceptable. Rental cars are allowed only when the work site cannot reasonably " +
+        "be reached by public transit, taxi or rideshare, and must be compact or " +
+        "mid-size.",
+
+        "Travel policy, section 2: what is covered. On domestic trips, meals are covered " +
+        "by a daily per diem, and meal receipts are not required. Alcohol is never " +
+        "reimbursable, with one exception: client entertainment that a director has " +
+        "approved in writing before the event. Rideshares and taxis between home, the " +
+        "airport and the hotel are reimbursable, as is airport parking. In-flight Wi-Fi " +
+        "is reimbursable when the traveller is working during the flight. Seat upgrades, " +
+        "airport lounge access and loyalty-program fees are personal expenses and are " +
+        "not reimbursed. Travel insurance is not reimbursed, because employees are " +
+        "already covered by the corporate travel insurance policy.",
+
+        "Travel policy, section 3: combining business and personal travel. Employees may " +
+        "extend a business trip for personal time. The company pays only the airfare it " +
+        "would have paid for the business dates alone; the employee pays any difference. " +
+        "Hotel nights before or after the business dates are personal expenses. " +
+        "Companions such as spouses, partners or family members travel entirely at the " +
+        "employee's own expense: the company does not pay companion airfare, companion " +
+        "meals, or any extra hotel cost a companion causes. When a companion shares the " +
+        "employee's room during business nights, the company pays the single-occupancy " +
+        "rate. Companions may attend client events only when the client has invited them.",
+
+        "Travel policy, section 4: expenses and reimbursement. Expense reports are " +
+        "submitted in Expensify within 30 days of the end of the trip. Receipts are " +
+        "required for every expense over $25, except per diem meals. The traveller's " +
+        "manager approves the report. After approval, finance pays the reimbursement " +
+        "through payroll, by direct deposit, in the next pay cycle. Reports submitted " +
+        "more than 60 days after the trip need a director's sign-off and may be denied. " +
+        "Employees with a corporate card must reconcile the card transactions in the " +
+        "same report, and any personal charge put on a corporate card must be repaid " +
+        "through that report.",
+
+        "Travel policy, section 5: exceptions and safety. Any exception to this policy " +
+        "requires written approval from the department head before travel begins. Trips " +
+        "booked through the portal are registered automatically with the company's " +
+        "travel-safety service, which can contact travellers during emergencies.",
+      ],
+      actual_output:
+        "Here's the full picture for your Chicago trip.\n\n" +
+        "Booking and approvals. Book everything through the company travel portal. Since " +
+        "Chicago is domestic, your manager's approval in the portal is all you need, and " +
+        "you won't need a vice president to sign off. If you find a cheaper fare directly " +
+        "on the airline's website, you can book it there and expense it instead. Your " +
+        "flight will be economy, though business class is allowed if the workshop starts " +
+        "the same morning you land. For the hotel, pick one of the preferred partner " +
+        "hotels in the portal, and feel free to add a rental car so you can get around " +
+        "Chicago on your own schedule. Booking through the portal also registers your trip with " +
+        "the travel-safety service automatically.\n\n" +
+        "What's covered. Your meals during the workshop are covered by the per diem, and " +
+        "you don't need to keep meal receipts. A glass of wine with dinner is fine, since " +
+        "it comes out of your per diem. Rideshares to and from the airport are covered, " +
+        "and so is airport parking if you drive. In-flight Wi-Fi is reimbursable if you " +
+        "work on the plane. Airport lounge access is also reimbursable on business trips. " +
+        "Hotel laundry is covered as well. " +
+        "Skip buying travel insurance; you're already covered by the corporate policy.\n\n" +
+        "Your spouse and the weekend. You're welcome to extend the trip for the weekend. " +
+        "The company pays the fare it would have paid for the workshop dates only, and " +
+        "you cover any difference. Your weekend hotel nights are covered too, as long as " +
+        "you stay at a partner hotel. Your spouse travels at your own expense, but if they " +
+        "come to the client dinner, the company will cover their airfare. When your spouse " +
+        "shares your room on the workshop nights, the company pays the single-occupancy " +
+        "rate.\n\n" +
+        "Getting reimbursed. Submit your report in Expensify within 30 days of getting " +
+        "back, with receipts for anything over $25. Your manager approves it, and finance " +
+        "then mails you a reimbursement check. If you used a corporate card, reconcile " +
+        "those charges in the same report.",
+    }],
+  },
   halluc: {
     metric: "faithfulness",
     cases: [{

@@ -15,11 +15,13 @@ export default async function handler(req, res) {
   }
 
   const gs = req.query.golden_set ? `&golden_set=eq.${encodeURIComponent(req.query.golden_set)}` : "";
+  // ?run=<id> returns that one run (the report page); otherwise the history list
+  const one = req.query.run ? `&run_id=eq.${encodeURIComponent(req.query.run)}` : "";
   const limit = Math.min(parseInt(req.query.limit || "200", 10), 1000);
 
   try {
     const r = await fetch(
-      `${url}/rest/v1/${table}?select=*&order=timestamp.desc&limit=${limit}${gs}`,
+      `${url}/rest/v1/${table}?select=*&order=timestamp.desc&limit=${one ? 1 : limit}${gs}${one}`,
       { headers: { apikey: key, Authorization: `Bearer ${key}` } }
     );
     if (!r.ok) {

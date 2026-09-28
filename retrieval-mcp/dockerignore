@@ -4,6 +4,7 @@ __pycache__/
 .venv/
 venv/
 web/**
+# the MCP widget inlines the shared report renderer
 !web/report.js
 !web/report.css
 demo/
