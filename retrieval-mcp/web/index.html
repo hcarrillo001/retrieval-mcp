@@ -721,7 +721,7 @@
   <div class="jev-grid">
     <div>
       <span class="badge">new judge · Jev by TypeSafe AI</span>
-      <h2>Same verdict, about 17&times; faster.</h2>
+      <h2>Same verdict, in a fraction of the time.</h2>
       <p class="lead">Jev doesn't explain or reason. It answers one question per claim, <b>is this supported, yes or no, and how sure</b>, and it answers fast. retriEVAL splits the answer into sentences, Jev checks every one in parallel, and the highlight shows exactly which claims are wrong.</p>
       <div class="jev-fit">
         <div><b>Use Jev for</b>a quick pass or fail on every claim: CI gates, regression runs, long answers, lots of cases.</div>
@@ -733,7 +733,7 @@
       </div>
     </div>
     <div class="jev-stats">
-      <div class="jev-stat"><div class="n">0.5 s <span>vs 8.5 s</span></div><div class="d">Jev (fast mode) against gpt-oss-120b on the same travel-policy answer. Both failed it for the same reasons.</div></div>
+      <div class="jev-stat"><div class="n">&lt; 1 s <span>vs 8&ndash;12 s</span></div><div class="d">Jev (fast mode) against gpt-oss-120b on the same answers in the sandbox, typically more than 10&times; faster. Both judges reached the same pass or fail.</div></div>
       <div class="jev-stat"><div class="n">15 / 15</div><div class="d">Planted errors caught in a 51-claim API answer, including all five changed numbers. No false alarms. A strong LLM judge also caught 15 of 15.</div></div>
       <div class="jev-stat"><div class="n">$0.002</div><div class="d">To check all 51 claims. Output tokens are free; you pay for input only.</div></div>
     </div>
