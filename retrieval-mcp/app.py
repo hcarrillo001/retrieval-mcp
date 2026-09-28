@@ -110,6 +110,13 @@ async def sandbox_route(request):
     return JSONResponse(result)
 
 
+# Stateless HTTP: every request stands alone, with no session id held in
+# memory. In the default stateful mode each client gets a session id that
+# lives only in this process, so any restart (a deploy, or Railway idling and
+# waking the service) made every connected Claude chat fail with "session
+# expired" until it reconnected. None of the tools keep per-session state, so
+# nothing is lost. Set before the app is built; stdio (server.py) is unaffected.
+mcp.settings.stateless_http = True
 app = mcp.streamable_http_app()
 # order matters: auth runs first (outermost), then host normalization
 app.add_middleware(NormalizeHost)
