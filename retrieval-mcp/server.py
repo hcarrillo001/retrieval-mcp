@@ -542,8 +542,9 @@ def run_eval(metrics: List[str], golden_set: str = "", cases: str = "",
     `report_url` in your response to the user, even when you summarise
     everything else. `aggregate[metric].verdict` says in words why each metric
     passed or failed (`headline` + `drivers`); explain the result from it rather
-    than only quoting the number. `summary_md` is a ready-to-render markdown
-    block (report link, score table, verdict) that can be shown verbatim.
+    than only quoting the number. `summary_md` is the result card (a coloured
+    diff block of scores and what failed, then the report link): SHOW IT
+    VERBATIM as the result, then add your explanation below it.
     Pass `judge="jev"` to score faithfulness, answer_relevancy and hallucination with Jev
     (per-claim probabilities, TypeSafe AI), `judge="llm"` for the LLM judge
     only, or leave it empty for the server default.
@@ -625,7 +626,7 @@ def _run_eval(metrics, golden_set, cases, threshold, outputs, label, limit,
     report = _report_link(run_id)
     if report:
         out["report_url"] = report
-    out["summary_md"] = _summary_md(aggregate, threshold, len(full), link, report)
+    out["summary_md"] = _summary_md(aggregate, threshold, len(full), link, report, full)
     return _structured(out)
 
 
@@ -642,34 +643,75 @@ def _structured(out: dict) -> CallToolResult:
 
 
 def _summary_md(aggregate: dict, threshold: float, n_cases: int, link: str,
-                report: str = "") -> str:
-    """A compact markdown block the client can render as-is.
+                report: str = "", per_case: Optional[list] = None) -> str:
+    """The result card as a coloured code block, for every client.
 
-    We cannot style the client's UI, so the lever we do have is returning
-    well-formed markdown: a scannable score line, a small table, and a labelled
-    link rather than a bare URL.
+    Clients with MCP Apps draw the HTML card; the rest only show what Claude
+    writes, and Claude is told to show this block verbatim. Chat apps colour a
+    ```diff block by line: "-" red, "+" green, anything else plain. So:
+        first line   every metric: score, PASS/FAIL, threshold
+        "- ✕"        a failing case or claim (red)
+        "  !"        borderline, or not in the context (plain)
+        "+ ✓"        what passed (green)
+    followed by the report link.
     """
-    lines = []
-    for m, a in aggregate.items():
-        score = a.get("mean_score")
-        pr = a.get("pass_rate")
-        mark = "PASS" if (score is not None and score >= threshold) else "FAIL"
-        passed = int(round((pr or 0) * n_cases))
-        lines.append(f"| {m} | **{score:.2f}** | {mark} | {passed}/{n_cases} |")
-    table = ("| metric | score | verdict | passed |\n"
-             "|---|---|---|---|\n" + "\n".join(lines))
-    out = []
-    if report:
-        out.append(_link_line(report, "Open the full report"))
-    elif link:
-        out.append(_link_line(link, "View this run in the dashboard"))
-    out += [table, f"\n_threshold {threshold:.2f}_"]
-    # the verdict in words, so the reply can say WHY and not just the number
-    for m, a in aggregate.items():
-        v = a.get("verdict") or {}
-        if v.get("headline"):
-            out.append(f"\n**{m}.** {v['headline']}")
-            out += [f"- {d}" for d in v.get("drivers", [])[:5]]
+    f2 = M._f2
+    per_case = per_case or []
+    if not aggregate:
+        return _link_line(report or link, "Open the full report").strip() if (report or link) else ""
+    one = lambda t: " ".join(str(t).split())            # a diff line must stay one line
+    # lead with the worst metric: that is the one to explain
+    m = min(aggregate, key=lambda k: aggregate[k].get("mean_score") or 0)
+    head = []
+    for k in sorted(aggregate, key=lambda k: k != m):
+        sc = aggregate[k].get("mean_score") or 0
+        head.append(f"{k} {f2(sc)} · {'PASS' if sc >= threshold else 'FAIL'}")
+    lines = ["  " + "   ".join(head) + f"   (threshold {f2(threshold)}, {n_cases} case{'s' if n_cases != 1 else ''})"]
+    rows = [r for r in per_case if (r.get("scores") or {}).get(m)]
+    if len(rows) > 1:
+        # one line per case, worst first; failing cases carry their reason
+        shown = sorted(rows, key=lambda r: r["scores"][m]["score"])[:6]
+        for r in shown:
+            sc = r["scores"][m]
+            q = M._clip(one(r.get("input") or ""), 70)
+            if sc.get("success") is False:
+                why = M._clip(one(sc.get("reason") or ""), 110)
+                lines.append(f"- ✕ {f2(sc['score'])}  {q}" + (f"  → {why}" if why else ""))
+            else:
+                lines.append(f"+ ✓ {f2(sc['score'])}  {q}")
+        more = max(len(rows), n_cases) - len(shown)
+        if more > 0:
+            lines.append(f"  … {more} more case{'s' if more != 1 else ''} in the full report")
+    elif len(rows) == 1:
+        sc = rows[0]["scores"][m]
+        claims = (sc.get("details") or {}).get("claims") or []
+        if claims:
+            def tone(c):
+                p = c.get("p", c.get("p_supported", 0))
+                if c.get("bad", not c.get("supported", True)):
+                    return "bad", p
+                return ("mid" if c.get("verdict") == "says_nothing" or p < 0.7 else "ok"), p
+            flagged = sorted([(c, *tone(c)) for c in claims if tone(c)[0] != "ok"], key=lambda x: x[2])
+            for c, t, p in flagged[:8]:
+                text = M._clip(one(c["claim"]), 110)
+                if t == "bad":
+                    lines.append(f"- ✕ {f2(p)}  {text}")
+                else:
+                    why = "not in context" if c.get("verdict") == "says_nothing" else "weak support"
+                    lines.append(f"  ! {f2(p)}  {text} ({why})")
+            if len(flagged) > 8:
+                lines.append(f"  … {len(flagged) - 8} more in the full report")
+            good = len(claims) - len(flagged)
+            if good:
+                lines.append(f"+ ✓ {good} other claim{'s' if good != 1 else ''} supported by the context")
+        else:
+            v = aggregate[m].get("verdict") or {}
+            ok = (aggregate[m].get("mean_score") or 0) >= threshold
+            for d in (v.get("drivers") or [])[:4]:
+                lines.append(("+ ✓ " if ok else "- ✕ ") + M._clip(one(d), 150))
+    out = ["```diff"] + lines + ["```"]
+    if report or link:
+        out.append(_link_line(report or link, "Open the full report").strip())
     return "\n".join(out)
 
 

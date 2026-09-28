@@ -79,7 +79,10 @@ def test_run_eval_returns_verdict_report_url_and_summary(tmp_path, monkeypatch):
     assert v["status"] == "fail" and v["drivers"][0] == "Invents a fact."
     assert sc["report_url"] == f"https://www.retrieval-mcp.com/report?run={sc['run_id']}"
     md = sc["summary_md"]
-    assert md.startswith("**[Open the full report](") and "**faithfulness.** Fails" in md
+    # the card: a diff block (red "-", green "+"), then the report link
+    assert md.startswith("```diff\n  faithfulness 0.40 · FAIL   (threshold 0.70, 1 case)")
+    assert "\n- ✕ Invents a fact." in md
+    assert md.rstrip().endswith(f"(https://www.retrieval-mcp.com/report?run={sc['run_id']})**")
     # the verdict is saved with the run, so the report page has it
     import history as H
     assert H.get_run(sc["run_id"])["aggregate"]["faithfulness"]["verdict"] == v
@@ -111,3 +114,20 @@ def test_explain_rounds_like_the_page_and_names_p_contradicts():
     v = M.explain("hallucination", [_row(0, "q", 0.0, "r", {"claims": claims, "kind": "contradiction"},
                                          "hallucination")], 0.7)
     assert "(P(contradicts)=1.00)" in v["drivers"][1]
+
+
+def test_summary_card_single_case_with_claims():
+    import server
+    claims = [{"claim": "Bad one.", "p": 0.02, "bad": True, "label": "unsupported"},
+              {"claim": "Iffy one.", "p": 0.59, "bad": False, "label": "supported"},
+              {"claim": "Silent one.", "p": 1.0, "bad": False, "verdict": "says_nothing"},
+              {"claim": "Good one.", "p": 0.97, "bad": False, "label": "supported"}]
+    rows = [_row(0, "q", 0.67, "r", {"claims": claims, "kind": "support"})]
+    agg = {"faithfulness": {"mean_score": 0.67, "verdict": M.explain("faithfulness", rows, 0.7)}}
+    md = server._summary_md(agg, 0.7, 1, "", "https://x/report?run=1", rows)
+    body = md.split("```diff\n", 1)[1].split("\n```", 1)[0].splitlines()
+    assert body[0].startswith("  faithfulness 0.67 · FAIL")
+    assert body[1:] == ["- ✕ 0.02  Bad one.",
+                        "  ! 0.59  Iffy one. (weak support)",
+                        "  ! 1.00  Silent one. (not in context)",
+                        "+ ✓ 1 other claim supported by the context"]
