@@ -21,6 +21,7 @@ from __future__ import annotations
 import os
 import re
 import json
+import time
 import contextvars
 
 from paths import home
@@ -256,6 +257,28 @@ def _ollama(system: str, user: str, max_tokens: int = 1024) -> str:
         return json.loads(r.read())["message"]["content"]
 
 
+# Free-tier providers cap tokens per minute; on a 429 we wait and retry this many
+# times, as long as the provider says the limit clears within the max wait.
+_RATE_LIMIT_RETRIES = int(os.environ.get("JUDGE_RATE_LIMIT_RETRIES", "2"))
+_RATE_LIMIT_MAX_WAIT = float(os.environ.get("JUDGE_RATE_LIMIT_MAX_WAIT", "30"))
+
+
+def _retry_after(headers, detail: str = "") -> float:
+    """Seconds until a 429 clears: Retry-After, then the text of the error
+    ("Please try again in 7.66s" / "in 1m2.5s"), else a short default."""
+    try:
+        v = (headers or {}).get("retry-after")
+        if v:
+            return max(0.0, float(v))
+    except (TypeError, ValueError):
+        pass
+    m = re.search(r"try again in (?:(\d+)m)?([\d.]+)(ms|s)", detail or "")
+    if m:
+        secs = float(m.group(2)) / (1000 if m.group(3) == "ms" else 1)
+        return secs + 60 * int(m.group(1) or 0)
+    return 5.0
+
+
 def _openai(system: str, user: str, max_tokens: int = 1024) -> str:
     """OpenAI-compatible Chat Completions. Works with OpenAI and any compatible
     endpoint (OpenRouter, Together, Groq, a local vLLM, etc.) via OPENAI_BASE_URL —
@@ -285,35 +308,51 @@ def _openai(system: str, user: str, max_tokens: int = 1024) -> str:
                  # 403 by Cloudflare-fronted APIs. Identify ourselves properly.
                  "User-Agent": "retriEVAL/1.0 (+https://retrieval-mcp.com)",
                  "Accept": "application/json"})
-    try:
-        with urllib.request.urlopen(req, timeout=180) as r:
-            return json.loads(r.read())["choices"][0]["message"]["content"]
-    except urllib.error.HTTPError as e:
-        # urllib's str() drops the response body, which is where providers put
-        # the real reason. Surface it so failures are diagnosable.
+    for attempt in range(_RATE_LIMIT_RETRIES + 1):
         try:
-            detail = e.read().decode("utf-8", "replace")[:400]
-        except Exception:
-            detail = ""
-        # a retired/renamed model id is the most common failure here, and the raw
-        # provider blob reads as "this product is broken" to anyone trying it
-        if e.code == 404 or "model_not_found" in detail:
+            with urllib.request.urlopen(req, timeout=180) as r:
+                return json.loads(r.read())["choices"][0]["message"]["content"]
+        except urllib.error.HTTPError as e:
+            # urllib's str() drops the response body, which is where providers put
+            # the real reason. Surface it so failures are diagnosable.
+            try:
+                detail = e.read().decode("utf-8", "replace")[:400]
+            except Exception:
+                detail = ""
+            code = e.code
+            if code == 429 and attempt < _RATE_LIMIT_RETRIES and "per day" not in detail.lower():
+                # free tiers cap tokens per MINUTE (Groq: 8K for gpt-oss-120b), so a
+                # second run right after a long one gets a 429 that clears in
+                # seconds. Wait it out instead of failing the run.
+                wait = _retry_after(e.headers, detail)
+                if wait <= _RATE_LIMIT_MAX_WAIT:
+                    time.sleep(wait + 0.5)
+                    continue
+            break
+    # a retired/renamed model id is the most common failure here, and the raw
+    # provider blob reads as "this product is broken" to anyone trying it
+    if code == 404 or "model_not_found" in detail:
+        raise RuntimeError(
+            f"This judge model is unavailable right now (the provider no longer "
+            f"serves '{model}'). Pick another model from the list \u2014 the others "
+            f"are unaffected."
+        ) from None
+    if code == 429:
+        if "per day" in detail.lower():
             raise RuntimeError(
-                f"This judge model is unavailable right now (the provider no longer "
-                f"serves '{model}'). Pick another model from the list \u2014 the others "
-                f"are unaffected."
+                "The free judge has used up today's allowance with its provider. "
+                "Try Jev, or come back tomorrow."
             ) from None
-        if e.code == 429:
-            raise RuntimeError(
-                "The free judge is busy right now (provider rate limit). Wait a moment "
-                "and try again, or pick another model from the list."
-            ) from None
-        if e.code in (401, 403):
-            raise RuntimeError(
-                "This judge model isn't configured on the server (missing or rejected "
-                "API key). Pick another model from the list."
-            ) from None
-        raise RuntimeError(f"judge HTTP {e.code} from {base}: {detail or e.reason}") from None
+        raise RuntimeError(
+            "The free judge is busy right now (provider rate limit). Wait about a "
+            "minute and try again, or run it with Jev."
+        ) from None
+    if code in (401, 403):
+        raise RuntimeError(
+            "This judge model isn't configured on the server (missing or rejected "
+            "API key). Pick another model from the list."
+        ) from None
+    raise RuntimeError(f"judge HTTP {code} from {base}: {detail or code}") from None
 
 
 # ---- Jev (TypeSafe AI) decision model ---------------------------------------

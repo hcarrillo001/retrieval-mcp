@@ -184,3 +184,10 @@ def test_explain_llm_claims_show_reasons_not_p():
               {"claim": "Span 1,280 m.", "p": 1.0, "bad": False}]
     v = M.explain("faithfulness", [_row(0, "q", 0.5, "r", {"judge": "llm", "claims": claims, "kind": "support"})], 0.7)
     assert v["drivers"][1] == "“Opened in 1937.”: Not in the context."
+
+
+def test_rate_limit_wait_parsing():
+    import judge as J
+    assert J._retry_after({"retry-after": "7"}) == 7.0
+    assert J._retry_after({}, "Please try again in 1m2.5s") == 62.5
+    assert J._retry_after({}, "try again in 450ms") == 0.45
