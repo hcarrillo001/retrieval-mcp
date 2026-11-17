@@ -13,6 +13,8 @@ A `case` is a dict with any of:
   expected_output    the golden / reference answer
   context            ground-truth context (for hallucination checks)
   retrieval_context  what a RAG system actually retrieved (list[str])
+  images             pictures the output describes: paths, URLs, data URIs, or
+                     {"src", "t"} dicts with a timestamp (frames from a video)
 
 Drop-in swap path: each function here could delegate to DeepEval or Ragas
 instead of the local judge — same signature, same result shape.
@@ -122,6 +124,63 @@ ANSWER:
          "supported_claims": r.get("supported_claims"),
          "total_claims": r.get("total_claims")},
     )
+
+
+def _frame_list(images) -> str:
+    """How the images are named in the prompt: Image 1, Image 2, ... in the
+    order they are attached, with the timestamp when there is one."""
+    lines = []
+    for i, im in enumerate(images if isinstance(images, list) else [images], 1):
+        t = im.get("t") if isinstance(im, dict) else None
+        lines.append(f"Image {i}" + (f" (t={float(t):g}s)" if t is not None else ""))
+    return "\n".join(lines)
+
+
+def visual_faithfulness(case: dict, jj: JudgeJSON, threshold: float = 0.7) -> dict:
+    """Is what the output says about the images actually visible in them?
+
+    The image counterpart of faithfulness: split the description into claims,
+    then check each against the attached images instead of retrieved text. Catches
+    objects that are not there, wrong colours, wrong positions and wrong counts.
+    Images arrive in order; for frames from a video or a flight each one can carry
+    a timestamp, so claims about timing are checked too."""
+    images = case.get("images") or []
+    answer = case.get("actual_output", "") or ""
+    user = f"""You are shown the IMAGES listed below, attached in this order:
+{_frame_list(images)}
+
+Extract the factual claims the DESCRIPTION makes about what is visible, then check
+each one against the images. A claim is supported only if it is clearly visible in
+at least one image. Treat as unsupported: objects that are not there, wrong colours,
+wrong positions or relations ("on", "next to"), wrong counts, and claims about timing
+that the image timestamps do not bear out. If an image is too dark or blurry to tell,
+the claim is unsupported and "why" says so.
+For every claim give: "claim" (standalone), "quote" (the shortest passage copied
+EXACTLY from the DESCRIPTION that states it), "supported" (true/false), "image"
+(the number of the image that shows it, or null), and, only when unsupported, "why"
+(one short sentence naming what the images show instead).
+score = supported_claims / total_claims (1.0 if no claims).
+Return JSON: {{"reasoning": str, "claims": [{{"claim": str, "quote": str, "supported": bool, "image": int|null, "why": str}}],
+"total_claims": int, "supported_claims": int, "score": 0.0-1.0}}
+
+DESCRIPTION:
+{answer}"""
+    r = jj(_SYS, user, _LLM_CLAIMS_MAX_TOKENS, images=images)
+    rows = _llm_claim_rows(r.get("claims"), answer)
+    for row, c in zip(rows, [c for c in (r.get("claims") or [])
+                             if isinstance(c, dict) and str(c.get("claim", "")).strip()]):
+        if isinstance(c.get("image"), int):
+            row["image"] = c["image"]
+    if rows:
+        n_sup = sum(1 for x in rows if not x["bad"])
+        return _result(
+            "visual_faithfulness", n_sup / len(rows), threshold, r.get("reasoning", ""),
+            {"judge": "llm", "kind": "visual", "claims": rows,
+             "total_claims": len(rows), "supported_claims": n_sup,
+             "unsupported_claims": [x["claim"] for x in rows if x["bad"]],
+             "images": len(images) if isinstance(images, list) else 1})
+    return _result("visual_faithfulness", r.get("score", 0.0), threshold,
+                   r.get("reasoning", ""), {"judge": "llm", "kind": "visual"})
 
 
 def hallucination(case: dict, jj: JudgeJSON, threshold: float = 0.7) -> dict:
@@ -320,6 +379,7 @@ REQUIRES = {
     "summarization":        ["input", "actual_output"],
     "bias":                 ["actual_output"],
     "toxicity":             ["actual_output"],
+    "visual_faithfulness":  ["actual_output", "images"],
 }
 
 
@@ -624,6 +684,7 @@ BUILTIN = {
     "bias": bias,
     "toxicity": toxicity,
     "summarization": summarization,
+    "visual_faithfulness": visual_faithfulness,
 }
 
 
@@ -677,7 +738,9 @@ def explain(metric: str, per_case: list, threshold: float) -> dict:
     if claims:
         bad = sorted([c for c in claims if c.get("bad", not c.get("supported", True))],
                      key=lambda c: c.get("p", c.get("p_supported", 0)))
-        what = "contradict the context" if d.get("kind") == "contradiction" else "are not supported by the context"
+        what = ("contradict the context" if d.get("kind") == "contradiction"
+                else "are not visible in the images" if d.get("kind") == "visual"
+                else "are not supported by the context")
         if bad:
             drivers.append(f"{len(bad)} of {len(claims)} claims {what}. Each one lowers the score:")
             for c in bad[:4]:
@@ -694,7 +757,8 @@ def explain(metric: str, per_case: list, threshold: float) -> dict:
             if len(bad) > 4:
                 drivers.append(f"…and {len(bad) - 4} more in the claims table.")
         else:
-            drivers.append(f"All {len(claims)} claims hold up against the context.")
+            src = "the images" if d.get("kind") == "visual" else "the context"
+            drivers.append(f"All {len(claims)} claims hold up against {src}.")
         if d.get("not_in_context"):
             drivers.append(f"{d['not_in_context']} claims aren't in the context at all; "
                            f"hallucination doesn't count those, faithfulness does.")

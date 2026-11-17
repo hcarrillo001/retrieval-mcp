@@ -430,6 +430,18 @@ def _link_line(url: str, label: str) -> str:
     return f"**[{label}]({url})**\n" if url else ""
 
 
+def _image_refs(images) -> list:
+    """What a saved run records about its images: the reference, not the bytes.
+    A data: URI would put megabytes of base64 into the run history."""
+    out = []
+    for im in (images or []):
+        src = im.get("src") if isinstance(im, dict) else im
+        src = "(inline image)" if str(src).startswith("data:") else str(src)
+        t = im.get("t") if isinstance(im, dict) else None
+        out.append({"src": src, "t": t} if t is not None else {"src": src})
+    return out
+
+
 def _save_inline(case: dict, results: dict, threshold: float,
                  golden_set: str, judge_model: str = "") -> str:
     """Persist a one-off scoring as a run so it gets a dashboard permalink.
@@ -444,6 +456,7 @@ def _save_inline(case: dict, results: dict, threshold: float,
                  "actual_output": case.get("actual_output", ""),
                  "expected_output": case.get("expected_output", ""),
                  "retrieval_context": case.get("retrieval_context", []),
+                 "images": _image_refs(case.get("images")),
                  "scores": results,
                  "min_score": min([r.get("score") or 0 for r in results.values()],
                                   default=0)}]
@@ -485,7 +498,9 @@ def list_metrics() -> dict:
         "judge": judge_label(),
         "scored_by_jev": sorted(M.JEV.keys()) if jev_enabled() else [],
         "notes": "faithfulness/contextual_* need retrieval_context; "
-                 "hallucination needs context; answer_relevancy needs input+actual_output.",
+                 "hallucination needs context; answer_relevancy needs input+actual_output; "
+                 "visual_faithfulness needs actual_output+images (paths or URLs) and a "
+                 "vision-capable judge.",
     }
 
 
@@ -545,6 +560,8 @@ def run_eval(metrics: List[str], golden_set: str = "", cases: str = "",
     than only quoting the number. `summary_md` is the result card (a coloured
     diff block of scores and what failed, then the report link): SHOW IT
     VERBATIM as the result, then add your explanation below it.
+    For visual_faithfulness, give each case an `images` list (file paths or
+    http(s) URLs, or {"src", "t"} objects with a timestamp for video frames).
     Pass `judge="jev"` to score faithfulness, answer_relevancy and hallucination with Jev
     (per-claim probabilities, TypeSafe AI), `judge="llm"` for the LLM judge
     only, or leave it empty for the server default.
@@ -588,6 +605,7 @@ def _run_eval(metrics, golden_set, cases, threshold, outputs, label, limit,
                    "actual_output": case.get("actual_output", ""),
                    "expected_output": case.get("expected_output", ""),
                    "retrieval_context": case.get("retrieval_context") or case.get("context") or [],
+                   "images": _image_refs(case.get("images")),
                    "scores": {}, "min_score": 1.0}
             for m in metrics:
                 res = _run_metric(m, case, threshold)
@@ -759,21 +777,25 @@ def reset_budget() -> dict:
 def evaluate_case(input: str, actual_output: str, metrics: List[str],
                   expected_output: str = "", context: Optional[List[str]] = None,
                   retrieval_context: Optional[List[str]] = None,
-                  threshold: float = 0.7, save: bool = True, judge: str = "") -> dict:
+                  threshold: float = 0.7, save: bool = True, judge: str = "",
+                  images: Optional[List[str]] = None) -> dict:
     """Score a single output inline, without loading a golden set. The result is
     saved as a one-case run (golden set "inline") so it has a dashboard link;
     pass save=False to score without recording it. `judge` works as in run_eval:
-    "jev", "llm", or empty for the server default."""
+    "jev", "llm", or empty for the server default.
+    `images` (for visual_faithfulness) takes image file paths or http(s) URLs.
+    Images pasted into a chat cannot be passed here: give a URL or a path."""
     with use_judge(judge):
         return _evaluate_case(input, actual_output, metrics, expected_output,
-                              context, retrieval_context, threshold, save)
+                              context, retrieval_context, threshold, save, images)
 
 
 def _evaluate_case(input, actual_output, metrics, expected_output, context,
-                   retrieval_context, threshold, save) -> dict:
+                   retrieval_context, threshold, save, images=None) -> dict:
     case = {"input": input, "actual_output": actual_output,
             "expected_output": expected_output,
-            "context": context or [], "retrieval_context": retrieval_context or []}
+            "context": context or [], "retrieval_context": retrieval_context or [],
+            "images": images or []}
     results = {m: _run_metric(m, case, threshold) for m in metrics}
     row = [{"index": 0, "input": case["input"], "scores": results}]
     out = {"scores": results,

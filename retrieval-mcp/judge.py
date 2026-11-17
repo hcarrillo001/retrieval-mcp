@@ -5,6 +5,9 @@ Backends (swap via env):
     RETRIEVAL_JUDGE_BACKEND   "anthropic" (default) | "ollama" | "openai" | "jev"
     OPENROUTER_API_KEY        enables the "nemotron" sandbox preset (NVIDIA, free)
     NEMOTRON_MODEL            default "nvidia/nemotron-3.5-super-vl:free"
+    RETRIEVAL_ALLOW_LOCAL_IMAGES  "1" (default) lets vision metrics read image files
+                              from disk; set "0" on a shared hosted server
+    RETRIEVAL_MAX_IMAGE_BYTES / RETRIEVAL_MAX_IMAGES   per-image size and per-call count caps
                               (jev: see the Jev section below)
     RETRIEVAL_JUDGE_MODEL     e.g. "claude-sonnet-4-6" or "deepseek-r1:70b"
     OLLAMA_URL                default "http://localhost:11434/api/chat"
@@ -244,8 +247,123 @@ def _extract_json(text: str) -> dict:
     return json.loads(text)
 
 
+# ---- images -----------------------------------------------------------------
+# Vision metrics hand the judge a list of image references. They are resolved
+# here, not in metrics.py, so the metrics stay I/O-free and testable with stubs.
+# A reference is a path, an http(s) URL, a data: URI, or a dict {"src": ..., "t": ...}
+# where t is an optional timestamp in seconds (frames from a video or a flight).
+MAX_IMAGE_BYTES = int(os.environ.get("RETRIEVAL_MAX_IMAGE_BYTES", str(5 * 1024 * 1024)))
+MAX_IMAGES = int(os.environ.get("RETRIEVAL_MAX_IMAGES", "20"))
+
+_MAGIC = [
+    (b"\x89PNG\r\n\x1a\n", "image/png"),
+    (b"\xff\xd8\xff", "image/jpeg"),
+    (b"GIF87a", "image/gif"),
+    (b"GIF89a", "image/gif"),
+]
+
+
+def _sniff(data: bytes) -> str:
+    for magic, mt in _MAGIC:
+        if data.startswith(magic):
+            return mt
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "image/webp"
+    return ""
+
+
+def _public_host(url: str) -> bool:
+    """False for loopback, private, link-local and reserved addresses, so an
+    image URL can't be used to reach the server's own network."""
+    import ipaddress
+    import socket
+    from urllib.parse import urlparse
+    host = urlparse(url).hostname
+    if not host:
+        return False
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except OSError:
+        return False
+    for info in infos:
+        ip = ipaddress.ip_address(info[4][0])
+        if (ip.is_private or ip.is_loopback or ip.is_link_local
+                or ip.is_reserved or ip.is_multicast or ip.is_unspecified):
+            return False
+    return True
+
+
+def _read_url(url: str) -> bytes:
+    import urllib.request
+    if not _public_host(url):
+        raise ValueError(f"image URL is not on a public host: {url}")
+    req = urllib.request.Request(url, headers={
+        "User-Agent": "retriEVAL/1.0 (+https://retrieval-mcp.com)"})
+    with urllib.request.urlopen(req, timeout=30) as r:
+        data = r.read(MAX_IMAGE_BYTES + 1)
+    return data
+
+
+def _local_images_allowed() -> bool:
+    # off on a shared hosted server: a caller there should not be able to make
+    # the judge read files off the server's disk
+    return os.environ.get("RETRIEVAL_ALLOW_LOCAL_IMAGES", "1").lower() not in ("0", "false", "no", "off")
+
+
+def load_image(ref) -> dict:
+    """Resolve one image reference to {"media_type", "data" (base64), "t", "label"}."""
+    import base64
+    from pathlib import Path
+
+    t = None
+    if isinstance(ref, dict):
+        t = ref.get("t")
+        ref = ref.get("src") or ref.get("url") or ref.get("path") or ""
+    ref = str(ref or "").strip()
+    if not ref:
+        raise ValueError("empty image reference")
+    if ref.startswith("data:"):
+        head, _, b64 = ref.partition(",")
+        raw = base64.b64decode(b64)
+        label = "inline image"
+    elif ref.startswith(("http://", "https://")):
+        raw = _read_url(ref)
+        label = ref
+    else:
+        if not _local_images_allowed():
+            raise ValueError("local image paths are disabled on this server; pass an image URL instead")
+        path = Path(ref).expanduser()
+        if not path.is_file():
+            raise ValueError(f"image not found: {ref}")
+        raw = path.read_bytes()
+        label = path.name
+    if len(raw) > MAX_IMAGE_BYTES:
+        raise ValueError(f"image is over {MAX_IMAGE_BYTES // (1024 * 1024)} MB: {label}")
+    mt = _sniff(raw)
+    if not mt:
+        raise ValueError(f"not a PNG, JPEG, GIF or WebP image: {label}")
+    return {"media_type": mt, "data": base64.b64encode(raw).decode("ascii"),
+            "t": t, "label": label}
+
+
+def load_images(refs) -> list:
+    refs = refs if isinstance(refs, list) else [refs]
+    if len(refs) > MAX_IMAGES:
+        raise ValueError(f"{len(refs)} images is over the limit of {MAX_IMAGES} "
+                         f"(set RETRIEVAL_MAX_IMAGES); sample fewer frames")
+    return [load_image(r) for r in refs]
+
+
 # ---- backends ---------------------------------------------------------------
-def _anthropic(system: str, user: str, max_tokens: int = 1024) -> str:
+def _anthropic_content(user: str, images):
+    if not images:
+        return user
+    blocks = [{"type": "image", "source": {"type": "base64", "media_type": im["media_type"],
+                                            "data": im["data"]}} for im in images]
+    return blocks + [{"type": "text", "text": user}]
+
+
+def _anthropic(system: str, user: str, max_tokens: int = 1024, images=None) -> str:
     from anthropic import Anthropic
 
     _check_budget()  # refuse before spending if cap already hit
@@ -254,7 +372,7 @@ def _anthropic(system: str, user: str, max_tokens: int = 1024) -> str:
              or os.environ.get("TOUCHSTONE_JUDGE_MODEL", "claude-sonnet-4-6"))
     resp = client.messages.create(
         model=model, max_tokens=max_tokens, system=system,
-        messages=[{"role": "user", "content": user}],
+        messages=[{"role": "user", "content": _anthropic_content(user, images)}],
     )
     u = resp.usage
     pin, pout = _price_for(model)
@@ -262,7 +380,7 @@ def _anthropic(system: str, user: str, max_tokens: int = 1024) -> str:
     return "".join(b.text for b in resp.content if getattr(b, "type", "") == "text")
 
 
-def _ollama(system: str, user: str, max_tokens: int = 1024) -> str:
+def _ollama(system: str, user: str, max_tokens: int = 1024, images=None) -> str:
     import urllib.request
 
     model = (os.environ.get("RETRIEVAL_JUDGE_MODEL")
@@ -272,6 +390,9 @@ def _ollama(system: str, user: str, max_tokens: int = 1024) -> str:
                "messages": [{"role": "system", "content": system},
                             {"role": "user", "content": user}],
                "options": {"num_predict": max_tokens}}
+    if images:
+        # Ollama takes base64 images on the message; the model must be a vision one
+        payload["messages"][1]["images"] = [im["data"] for im in images]
     req = urllib.request.Request(url, data=json.dumps(payload).encode(),
                                  headers={"Content-Type": "application/json"})
     with urllib.request.urlopen(req) as r:
@@ -300,7 +421,7 @@ def _retry_after(headers, detail: str = "") -> float:
     return 5.0
 
 
-def _openai(system: str, user: str, max_tokens: int = 1024) -> str:
+def _openai(system: str, user: str, max_tokens: int = 1024, images=None) -> str:
     """OpenAI-compatible Chat Completions. Works with OpenAI and any compatible
     endpoint (OpenRouter, Together, Groq, a local vLLM, etc.) via OPENAI_BASE_URL —
     so users can bring whatever LLM they want with their own key.
@@ -318,9 +439,15 @@ def _openai(system: str, user: str, max_tokens: int = 1024) -> str:
     key = (key or "").strip()          # stray whitespace/newline from a pasted env var
     if key.lower().startswith("bearer "):
         key = key[7:].strip()          # tolerate a key pasted WITH the prefix
+    content = user
+    if images:
+        content = [{"type": "text", "text": user}] + [
+            {"type": "image_url",
+             "image_url": {"url": f"data:{im['media_type']};base64,{im['data']}"}}
+            for im in images]
     payload = {"model": model, "max_tokens": max_tokens,
                "messages": [{"role": "system", "content": system},
-                            {"role": "user", "content": user}]}
+                            {"role": "user", "content": content}]}
     req = urllib.request.Request(
         base + "/chat/completions", data=json.dumps(payload).encode(),
         headers={"Content-Type": "application/json",
@@ -538,7 +665,7 @@ def get_judge():
 JUDGE_MAX_TOKENS_CAP = int(os.environ.get("RETRIEVAL_JUDGE_MAX_TOKENS", "8192"))
 
 
-def judge_json(system: str, user: str, max_tokens: int = 1024) -> dict:
+def judge_json(system: str, user: str, max_tokens: int = 1024, images=None) -> dict:
     """Ask the judge for JSON.
 
     A fixed 1024-token reply budget silently truncates the JSON on long inputs,
@@ -549,11 +676,14 @@ def judge_json(system: str, user: str, max_tokens: int = 1024) -> dict:
     est = len(system) + len(user)
     budget = max(max_tokens, min(JUDGE_MAX_TOKENS_CAP, est // 3))
     fn = get_judge()
-    raw = fn(system, user, budget)
+    # images are loaded once and only passed when present, so backends (and
+    # test stubs) that never see images keep their three-argument signature
+    extra = {"images": load_images(images)} if images else {}
+    raw = fn(system, user, budget, **extra)
     try:
         return _extract_json(raw)
     except (json.JSONDecodeError, ValueError):
         retry = min(JUDGE_MAX_TOKENS_CAP, max(budget * 3, 4096))
         if retry <= budget:
             raise  # already at the cap; a bigger budget won't help
-        return _extract_json(fn(system, user, retry))
+        return _extract_json(fn(system, user, retry, **extra))

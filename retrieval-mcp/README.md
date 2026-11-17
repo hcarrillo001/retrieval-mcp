@@ -81,9 +81,29 @@ you're evaluating anything you can't send to a third party.
 
 `faithfulness` · `answer_relevancy` · `contextual_precision` ·
 `contextual_recall` · `contextual_relevancy` · `hallucination` · `bias` ·
-`toxicity` · `summarization` — plus **authored G-Eval** metrics you define in
+`toxicity` · `summarization` · `visual_faithfulness` — plus **authored G-Eval** metrics you define in
 plain language. All are normalized so **higher = better** (bias/toxicity report
 the clean fraction), and each reasons before scoring.
+
+### Visual faithfulness (images and video frames)
+
+`visual_faithfulness` checks what an output says about **images** instead of
+retrieved text. It splits the description into claims and checks each one
+against the attached pictures, catching objects that aren't there, wrong
+colours, wrong positions and wrong counts.
+
+```json
+{"actual_output": "A blue backpack is on the couch next to a red pillow.",
+ "images": ["photos/living_room_01.jpg"]}
+```
+
+`images` takes file paths, http(s) URLs, or `{"src": ..., "t": 12.0}` objects
+with a timestamp, so frames sampled from a video (or a drone flight) work too.
+It needs a judge that can see images: Claude, an OpenAI-compatible vision model
+such as NVIDIA's `nemotron-3.5-super-vl`, or an Ollama vision model. Images
+pasted into a chat can't be passed through a tool call, so use a URL or a path.
+On a shared hosted server, set `RETRIEVAL_ALLOW_LOCAL_IMAGES=0` so callers can't
+make it read files from its own disk.
 
 ## Versatile golden sets
 

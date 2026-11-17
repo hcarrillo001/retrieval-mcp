@@ -25,9 +25,11 @@ _ALIASES = {
     "context": "context", "contexts": "context",
     "retrieval_context": "retrieval_context", "retrieved": "retrieval_context",
     "retrieved_contexts": "retrieval_context", "passages": "retrieval_context",
+    "images": "images", "image": "images", "frames": "images",
+    "screenshots": "images", "photos": "images",
 }
 
-_LIST_FIELDS = {"context", "retrieval_context"}
+_LIST_FIELDS = {"context", "retrieval_context", "images"}
 
 
 def _normalize(record: dict) -> dict:
@@ -37,6 +39,9 @@ def _normalize(record: dict) -> dict:
         if not key:
             continue
         if key in _LIST_FIELDS and isinstance(v, str):
+            # a CSV cell can hold several image paths separated by "|"
+            v = [x.strip() for x in v.split("|") if x.strip()] if key == "images" else [v]
+        elif key == "images" and isinstance(v, dict):
             v = [v]
         out[key] = v
     return out
