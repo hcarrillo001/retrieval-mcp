@@ -105,6 +105,24 @@ pasted into a chat can't be passed through a tool call, so use a URL or a path.
 On a shared hosted server, set `RETRIEVAL_ALLOW_LOCAL_IMAGES=0` so callers can't
 make it read files from its own disk.
 
+**Recorded facts for what a picture can't show.** A robot's or drone's report
+mixes things you can see ("found the blue backpack") with things only its own
+log knows ("flew 262 cm"). Pass the log as `context`, plain sentences, and each
+claim passes if an image shows it **or** the recorded facts state it. Every
+claim in the result says which backed it (`"source": "image"` with the image
+number, or `"source": "facts"`), and a claim that contradicts the log fails.
+
+```json
+{"actual_output": "Found the blue backpack and flew 262 cm toward it.",
+ "images": [{"src": "frames/f3.jpg", "t": 5.0}],
+ "context": ["At t=10.6s it stopped 100 cm from the blue backpack after flying 262 cm toward it."]}
+```
+
+A claim only has to be visible in **one** image. Small local vision models
+often miss a claim when it appears in just one of several images, so claims the
+first pass rejects get a second look one image at a time (at most 6 extra judge
+calls). The recheck can only confirm what a single image clearly shows.
+
 **Choosing the judge per call:** `run_eval` and `evaluate_case` take
 `judge="nemotron"` (or `"nvidia"`) to score that call with NVIDIA's open
 Nemotron vision-language model, free through OpenRouter. It needs

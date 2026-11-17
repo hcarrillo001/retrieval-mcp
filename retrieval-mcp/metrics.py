@@ -136,6 +136,50 @@ def _frame_list(images) -> str:
     return "\n".join(lines)
 
 
+# per-image recheck: at most this many extra judge calls per case
+VISUAL_RECHECK_MAX = 6
+
+
+def _facts(case: dict) -> list:
+    return [str(f).strip() for f in (case.get("context") or []) if str(f).strip()]
+
+
+def _recheck_per_image(rows: list, images: list, jj: JudgeJSON) -> int:
+    """Second look for claims the first pass rejected, one image at a time.
+
+    Judges, small local vision models above all, often miss a claim when it is
+    shown in only one of several images: "found the blue backpack" gets rejected
+    because image 1 is the couch. Asking about each image on its own fixes that.
+    Only claims already rejected are rechecked, so this can only add support
+    that a single image clearly shows. Returns how many claims it changed."""
+    if not isinstance(images, list) or len(images) < 2:
+        return 0
+    fixed = 0
+    for i, im in enumerate(images[:VISUAL_RECHECK_MAX], 1):
+        pending = [r for r in rows if r["bad"]]
+        if not pending:
+            break
+        listing = "\n".join(f"{n}. {r['claim']}" for n, r in enumerate(pending, 1))
+        user = f"""You are shown ONE image. For each numbered claim below, decide whether
+the image clearly shows it. Be strict: a claim counts only if it is plainly visible
+(right object, right colour, right relation). If unsure, it is not shown.
+Return JSON: {{"shown": [claim numbers that this image clearly shows]}}
+
+CLAIMS:
+{listing}"""
+        try:
+            r = jj(_SYS, user, 256, images=[im])
+        except Exception:      # a failed recheck leaves the first verdict standing
+            continue
+        for n in r.get("shown") or []:
+            if isinstance(n, int) and 1 <= n <= len(pending):
+                row = pending[n - 1]
+                row.update(supported=True, bad=False, p=1.0, label="supported",
+                           why="", image=i, source="image", rechecked=True)
+                fixed += 1
+    return fixed
+
+
 def visual_faithfulness(case: dict, jj: JudgeJSON, threshold: float = 0.7) -> dict:
     """Is what the output says about the images actually visible in them?
 
@@ -143,26 +187,43 @@ def visual_faithfulness(case: dict, jj: JudgeJSON, threshold: float = 0.7) -> di
     then check each against the attached images instead of retrieved text. Catches
     objects that are not there, wrong colours, wrong positions and wrong counts.
     Images arrive in order; for frames from a video or a flight each one can carry
-    a timestamp, so claims about timing are checked too."""
+    a timestamp, so claims about timing are checked too.
+
+    `context` is optional RECORDED FACTS: what the system logged itself (a drone's
+    distances, heights, actions). Claims a camera can't show, such as "flew 262 cm",
+    are checked against those instead. Each claim says which source backed it.
+    A claim needs only one image that shows it; when the first pass misses one,
+    the rejected claims get a second look one image at a time."""
     images = case.get("images") or []
     answer = case.get("actual_output", "") or ""
+    facts = _facts(case)
+    facts_rules = """
+You also get RECORDED FACTS: data the system logged itself (positions, distances,
+heights, timings, actions it took, results of its own checks). A claim is ALSO
+supported when the recorded facts state it or directly imply it; use this for
+claims no picture can show, like distances or what the system did. A claim that
+contradicts the recorded facts is unsupported.""" if facts else ""
+    source_field = (' "source" ("image" or "facts", null when unsupported),' if facts else "")
     user = f"""You are shown the IMAGES listed below, attached in this order:
 {_frame_list(images)}
-
-Extract the factual claims the DESCRIPTION makes about what is visible, then check
-each one against the images. A claim is supported only if it is clearly visible in
-at least one image. Treat as unsupported: objects that are not there, wrong colours,
-wrong positions or relations ("on", "next to"), wrong counts, and claims about timing
-that the image timestamps do not bear out. If an image is too dark or blurry to tell,
-the claim is unsupported and "why" says so.
+{facts_rules}
+Extract the factual claims the DESCRIPTION makes, then check each one. A claim
+about what is visible is supported if it is clearly visible in AT LEAST ONE image;
+it does not need to appear in every image, so judge it against the image that shows
+it best. Treat as unsupported: objects that are not there, wrong colours, wrong
+positions or relations ("on", "next to"), wrong counts, and claims about timing
+that the image timestamps do not bear out. If an image is too dark or blurry to
+tell, the claim is unsupported and "why" says so.
 For every claim give: "claim" (standalone), "quote" (the shortest passage copied
 EXACTLY from the DESCRIPTION that states it), "supported" (true/false), "image"
-(the number of the image that shows it, or null), and, only when unsupported, "why"
-(one short sentence naming what the images show instead).
+(the number of the image that shows it, or null),{source_field} and, only when
+unsupported, "why" (one short sentence naming what the images{" and facts" if facts else ""} show instead).
 score = supported_claims / total_claims (1.0 if no claims).
-Return JSON: {{"reasoning": str, "claims": [{{"claim": str, "quote": str, "supported": bool, "image": int|null, "why": str}}],
+Return JSON: {{"reasoning": str, "claims": [{{"claim": str, "quote": str, "supported": bool, "image": int|null,{' "source": str|null,' if facts else ""} "why": str}}],
 "total_claims": int, "supported_claims": int, "score": 0.0-1.0}}
-
+""" + (f"""
+RECORDED FACTS:
+- """ + "\n- ".join(facts) + "\n" if facts else "") + f"""
 DESCRIPTION:
 {answer}"""
     r = jj(_SYS, user, _LLM_CLAIMS_MAX_TOKENS, images=images)
@@ -171,14 +232,22 @@ DESCRIPTION:
                              if isinstance(c, dict) and str(c.get("claim", "")).strip()]):
         if isinstance(c.get("image"), int):
             row["image"] = c["image"]
+        if row["supported"]:
+            src = str(c.get("source") or "").lower()
+            row["source"] = "facts" if (facts and src == "facts") else "image"
     if rows:
+        rechecked = _recheck_per_image(rows, images, jj)
         n_sup = sum(1 for x in rows if not x["bad"])
-        return _result(
-            "visual_faithfulness", n_sup / len(rows), threshold, r.get("reasoning", ""),
-            {"judge": "llm", "kind": "visual", "claims": rows,
-             "total_claims": len(rows), "supported_claims": n_sup,
-             "unsupported_claims": [x["claim"] for x in rows if x["bad"]],
-             "images": len(images) if isinstance(images, list) else 1})
+        details = {"judge": "llm", "kind": "visual", "claims": rows,
+                   "total_claims": len(rows), "supported_claims": n_sup,
+                   "unsupported_claims": [x["claim"] for x in rows if x["bad"]],
+                   "images": len(images) if isinstance(images, list) else 1}
+        if facts:
+            details["facts"] = len(facts)
+        if rechecked:
+            details["rechecked"] = rechecked
+        return _result("visual_faithfulness", n_sup / len(rows), threshold,
+                       r.get("reasoning", ""), details)
     return _result("visual_faithfulness", r.get("score", 0.0), threshold,
                    r.get("reasoning", ""), {"judge": "llm", "kind": "visual"})
 
@@ -739,7 +808,8 @@ def explain(metric: str, per_case: list, threshold: float) -> dict:
         bad = sorted([c for c in claims if c.get("bad", not c.get("supported", True))],
                      key=lambda c: c.get("p", c.get("p_supported", 0)))
         what = ("contradict the context" if d.get("kind") == "contradiction"
-                else "are not visible in the images" if d.get("kind") == "visual"
+                else ("are not visible in the images or in the recorded facts" if d.get("facts")
+                      else "are not visible in the images") if d.get("kind") == "visual"
                 else "are not supported by the context")
         if bad:
             drivers.append(f"{len(bad)} of {len(claims)} claims {what}. Each one lowers the score:")
@@ -757,7 +827,8 @@ def explain(metric: str, per_case: list, threshold: float) -> dict:
             if len(bad) > 4:
                 drivers.append(f"…and {len(bad) - 4} more in the claims table.")
         else:
-            src = "the images" if d.get("kind") == "visual" else "the context"
+            src = (("the images and recorded facts" if d.get("facts") else "the images")
+                   if d.get("kind") == "visual" else "the context")
             drivers.append(f"All {len(claims)} claims hold up against {src}.")
         if d.get("not_in_context"):
             drivers.append(f"{d['not_in_context']} claims aren't in the context at all; "

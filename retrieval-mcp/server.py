@@ -502,7 +502,8 @@ def list_metrics() -> dict:
         "notes": "faithfulness/contextual_* need retrieval_context; "
                  "hallucination needs context; answer_relevancy needs input+actual_output; "
                  "visual_faithfulness needs actual_output+images (paths or URLs) and a "
-                 "vision-capable judge.",
+                 "vision-capable judge; optional context = recorded facts (sensor or log "
+                 "data) for claims a picture can't show.",
     }
 
 
@@ -790,7 +791,10 @@ def evaluate_case(input: str, actual_output: str, metrics: List[str],
     server default.
     `images` (for visual_faithfulness) takes image file paths or http(s) URLs,
     or {"src": ..., "t": seconds} objects for timestamped video or flight frames.
-    Images pasted into a chat cannot be passed here: give a URL or a path."""
+    Images pasted into a chat cannot be passed here: give a URL or a path.
+    With visual_faithfulness, `context` is optional recorded facts (a robot's or
+    drone's own log: distances, heights, actions). Claims no picture can show are
+    checked against those, and each claim says whether an image or the facts backed it."""
     with use_judge(judge):
         return _evaluate_case(input, actual_output, metrics, expected_output,
                               context, retrieval_context, threshold, save, images)
