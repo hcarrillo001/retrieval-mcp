@@ -85,3 +85,35 @@ def test_none_content_becomes_empty_string(monkeypatch, judge):
 ])
 def test_extract_json_ignores_thinking(judge, raw):
     assert judge._extract_json(raw) == {"score": 1}
+
+
+# ---- choosing NVIDIA per call from the MCP tools ---------------------------------
+
+def test_use_judge_routes_one_call_to_nemotron(monkeypatch, judge):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test")
+    assert judge._override.get() is None
+    with judge.use_judge("nemotron"):
+        assert judge._override.get()["base_url"] == "https://openrouter.ai/api/v1"
+        assert judge.get_judge() is judge._openai
+        assert judge.jev_enabled() is False
+        assert judge.judge_label().startswith("nvidia/")
+    assert judge._override.get() is None          # back to the server default
+
+
+def test_nvidia_alias(monkeypatch, judge):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test")
+    with judge.use_judge("NVIDIA"):
+        assert judge._override.get()["model"].startswith("nvidia/")
+
+
+def test_nemotron_without_key_says_what_is_missing(judge):
+    with pytest.raises(RuntimeError, match="OPENROUTER_API_KEY"):
+        with judge.use_judge("nemotron"):
+            pass
+    assert judge._override.get() is None
+    assert judge._jev_mode.get() is None
+
+
+def test_unknown_judge_lists_options(judge):
+    with pytest.raises(ValueError, match="nemotron"):
+        judge.use_judge("gpt-9")

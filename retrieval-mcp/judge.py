@@ -543,25 +543,52 @@ def jev_enabled() -> bool:
     return _backend_name() == "jev"
 
 
+# friendlier names a caller can use for a model preset
+_JUDGE_ALIASES = {"nvidia": "nemotron"}
+
+
+def model_presets() -> list:
+    """Presets the `judge` argument accepts by name (LLM judges, not Jev)."""
+    return sorted(k for k, p in SANDBOX_PRESETS.items() if p.get("kind") != "jev")
+
+
 class use_judge:
     """Context manager for the MCP tools' `judge` argument:
         "" / "default"  whatever RETRIEVAL_JUDGE_BACKEND says
         "jev"           Jev for faithfulness + answer_relevancy, LLM for the rest
-        "llm"           the LLM judge only, even when the server default is jev"""
+        "llm"           the LLM judge only, even when the server default is jev
+        "nemotron"      a named model preset for this call only (alias "nvidia"):
+                        NVIDIA Nemotron via OpenRouter, free; "groq-llama" etc.
+                        work the same way. Needs that preset's key on the server."""
     def __init__(self, judge: str = ""):
         j = (judge or "default").strip().lower()
-        if j not in ("default", "jev", "llm"):
-            raise ValueError(f"judge must be 'jev', 'llm' or '' (got '{judge}')")
-        if j == "jev" and not os.environ.get("TYPESAFE_API_KEY"):
-            raise RuntimeError("judge='jev' needs TYPESAFE_API_KEY on the server.")
-        self.mode = {"default": None, "jev": True, "llm": False}[j]
+        j = _JUDGE_ALIASES.get(j, j)
+        self._preset = None
+        if j in ("default", "jev", "llm"):
+            if j == "jev" and not os.environ.get("TYPESAFE_API_KEY"):
+                raise RuntimeError("judge='jev' needs TYPESAFE_API_KEY on the server.")
+            self.mode = {"default": None, "jev": True, "llm": False}[j]
+        elif j in model_presets():
+            self._preset = judge_as(j)      # checks the key when entered
+            self.mode = False               # a named LLM preset never routes to Jev
+        else:
+            raise ValueError(f"judge must be 'jev', 'llm', '' or one of "
+                             f"{', '.join(model_presets())} (got '{judge}')")
         self._token = None
 
     def __enter__(self):
         self._token = _jev_mode.set(self.mode)
+        if self._preset is not None:
+            try:
+                self._preset.__enter__()
+            except Exception:
+                _jev_mode.reset(self._token)
+                raise
         return self
 
     def __exit__(self, *exc):
+        if self._preset is not None:
+            self._preset.__exit__(*exc)
         _jev_mode.reset(self._token)
         return False
 
@@ -642,7 +669,8 @@ def jev_split_mode(sandbox: bool = False) -> str:
 
 def judge_label() -> str:
     """Name of whatever is actually scoring, recorded with each run."""
-    llm = os.environ.get("RETRIEVAL_JUDGE_MODEL", "claude-sonnet-4-6")
+    ov = _override.get()
+    llm = (ov or {}).get("model") or os.environ.get("RETRIEVAL_JUDGE_MODEL", "claude-sonnet-4-6")
     if jev_enabled():
         return f"{os.environ.get('JEV_MODEL', 'jev-latest')} + {llm}"
     return llm

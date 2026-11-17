@@ -105,6 +105,12 @@ pasted into a chat can't be passed through a tool call, so use a URL or a path.
 On a shared hosted server, set `RETRIEVAL_ALLOW_LOCAL_IMAGES=0` so callers can't
 make it read files from its own disk.
 
+**Choosing the judge per call:** `run_eval` and `evaluate_case` take
+`judge="nemotron"` (or `"nvidia"`) to score that call with NVIDIA's open
+Nemotron vision-language model, free through OpenRouter. It needs
+`OPENROUTER_API_KEY` on the server, and it can see images, so it works for
+`visual_faithfulness`. `list_metrics` shows which judges this server can use.
+
 ## Versatile golden sets
 
 `load_golden_set` accepts a **file path** (including uploaded files), an

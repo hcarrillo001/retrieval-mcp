@@ -497,6 +497,8 @@ def list_metrics() -> dict:
         "custom": sorted(CUSTOM_METRICS.keys()),
         "judge": judge_label(),
         "scored_by_jev": sorted(M.JEV.keys()) if jev_enabled() else [],
+        "judges": ["(default)", "llm"] + (["jev"] if os.environ.get("TYPESAFE_API_KEY") else [])
+                  + [m["id"] for m in sandbox_models() if m.get("available") and m["id"] != "jev"],
         "notes": "faithfulness/contextual_* need retrieval_context; "
                  "hallucination needs context; answer_relevancy needs input+actual_output; "
                  "visual_faithfulness needs actual_output+images (paths or URLs) and a "
@@ -564,7 +566,9 @@ def run_eval(metrics: List[str], golden_set: str = "", cases: str = "",
     http(s) URLs, or {"src", "t"} objects with a timestamp for video frames).
     Pass `judge="jev"` to score faithfulness, answer_relevancy and hallucination with Jev
     (per-claim probabilities, TypeSafe AI), `judge="llm"` for the LLM judge
-    only, or leave it empty for the server default.
+    only, `judge="nemotron"` (or "nvidia") for NVIDIA's open Nemotron model, free
+    through OpenRouter and able to see images, or leave it empty for the server
+    default.
     Raises if the spend cap is hit mid-run; partial spend is still metered."""
     with use_judge(judge):
         return _run_eval(metrics, golden_set, cases, threshold, outputs, label,
@@ -782,7 +786,8 @@ def evaluate_case(input: str, actual_output: str, metrics: List[str],
     """Score a single output inline, without loading a golden set. The result is
     saved as a one-case run (golden set "inline") so it has a dashboard link;
     pass save=False to score without recording it. `judge` works as in run_eval:
-    "jev", "llm", or empty for the server default.
+    "jev", "llm", "nemotron" (NVIDIA, free, can see images), or empty for the
+    server default.
     `images` (for visual_faithfulness) takes image file paths or http(s) URLs.
     Images pasted into a chat cannot be passed here: give a URL or a path."""
     with use_judge(judge):
