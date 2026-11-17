@@ -3,6 +3,8 @@ Judge backend for RetriEval, with a hard spend cap.
 
 Backends (swap via env):
     RETRIEVAL_JUDGE_BACKEND   "anthropic" (default) | "ollama" | "openai" | "jev"
+    OPENROUTER_API_KEY        enables the "nemotron" sandbox preset (NVIDIA, free)
+    NEMOTRON_MODEL            default "nvidia/nemotron-3.5-super-vl:free"
                               (jev: see the Jev section below)
     RETRIEVAL_JUDGE_MODEL     e.g. "claude-sonnet-4-6" or "deepseek-r1:70b"
     OLLAMA_URL                default "http://localhost:11434/api/chat"
@@ -62,6 +64,18 @@ SANDBOX_PRESETS = {
         "key_env": "GROQ_API_KEY",
         "model": _model("GROQ_MODEL", "openai/gpt-oss-120b"),
     },
+    # NVIDIA Nemotron, an open-weight model, via OpenRouter's free endpoint.
+    # Free tier is rate-limited (about 20 requests/minute, 50/day until the
+    # account has bought credit), so it is hidden until OPENROUTER_API_KEY is
+    # set. Swap the model with NEMOTRON_MODEL; the label follows.
+    "nemotron": {
+        "label": _label("NEMOTRON_LABEL", "NVIDIA via OpenRouter (free)",
+                        _model("NEMOTRON_MODEL", "nvidia/nemotron-3.5-super-vl:free")),
+        "base_url": "https://openrouter.ai/api/v1",
+        "key_env": "OPENROUTER_API_KEY",
+        "model": _model("NEMOTRON_MODEL", "nvidia/nemotron-3.5-super-vl:free"),
+        "optional": True,
+    },
     # Jev scores claims; the LLM preset named in "decomposer" splits the answer
     # into claims. Listed in the picker only once TYPESAFE_API_KEY is set.
     "jev": {
@@ -101,6 +115,8 @@ def sandbox_models() -> list[dict]:
             ok = bool(os.environ.get(d["key_env"], ""))
             out.append({"id": mid, "label": p["label"], "available": ok,
                         "metrics": list(JEV_METRICS)})
+            continue
+        if not ok and p.get("optional"):
             continue
         out.append({"id": mid, "label": p["label"], "available": ok})
     return out
@@ -214,6 +230,11 @@ def _check_budget() -> None:
 
 # ---- JSON parsing -----------------------------------------------------------
 def _extract_json(text: str) -> dict:
+    # reasoning models (Nemotron, DeepSeek-R1, Qwen3) may wrap their reply in
+    # <think>...</think>, and braces inside the thinking would confuse the
+    # first-{ / last-} slice below. Drop closed blocks, then an unclosed one.
+    text = re.sub(r"<think>.*?</think>", "", text or "", flags=re.S)
+    text = re.sub(r"^.*?</think>", "", text, flags=re.S)
     text = text.strip()
     text = re.sub(r"^```(?:json)?", "", text).strip()
     text = re.sub(r"```$", "", text).strip()
@@ -311,7 +332,10 @@ def _openai(system: str, user: str, max_tokens: int = 1024) -> str:
     for attempt in range(_RATE_LIMIT_RETRIES + 1):
         try:
             with urllib.request.urlopen(req, timeout=180) as r:
-                return json.loads(r.read())["choices"][0]["message"]["content"]
+                msg = json.loads(r.read())["choices"][0]["message"]
+                # reasoning models can spend the whole budget thinking and return
+                # content=None; hand back "" so judge_json retries with more room
+                return msg.get("content") or ""
         except urllib.error.HTTPError as e:
             # urllib's str() drops the response body, which is where providers put
             # the real reason. Surface it so failures are diagnosable.
