@@ -18,7 +18,7 @@ import json
 import os
 import time
 import statistics
-from typing import List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from mcp.server.fastmcp import FastMCP, Image
 from mcp.types import CallToolResult, TextContent
@@ -782,13 +782,14 @@ def evaluate_case(input: str, actual_output: str, metrics: List[str],
                   expected_output: str = "", context: Optional[List[str]] = None,
                   retrieval_context: Optional[List[str]] = None,
                   threshold: float = 0.7, save: bool = True, judge: str = "",
-                  images: Optional[List[str]] = None) -> dict:
+                  images: Optional[List[Union[str, Dict[str, Any]]]] = None) -> dict:
     """Score a single output inline, without loading a golden set. The result is
     saved as a one-case run (golden set "inline") so it has a dashboard link;
     pass save=False to score without recording it. `judge` works as in run_eval:
     "jev", "llm", "nemotron" (NVIDIA, free, can see images), or empty for the
     server default.
-    `images` (for visual_faithfulness) takes image file paths or http(s) URLs.
+    `images` (for visual_faithfulness) takes image file paths or http(s) URLs,
+    or {"src": ..., "t": seconds} objects for timestamped video or flight frames.
     Images pasted into a chat cannot be passed here: give a URL or a path."""
     with use_judge(judge):
         return _evaluate_case(input, actual_output, metrics, expected_output,

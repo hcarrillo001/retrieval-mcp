@@ -262,3 +262,19 @@ def test_evaluate_case_end_to_end(monkeypatch):
                                 "", None, None, 0.7, False, ["photo.jpg"])
     assert out["scores"]["visual_faithfulness"]["score"] == pytest.approx(2 / 3, abs=1e-3)
     assert seen["images"] == ["photo.jpg"]
+
+
+def test_evaluate_case_tool_accepts_timestamped_frames(monkeypatch):
+    """Through the MCP tool layer, not just the Python function: the tool's
+    schema must let {"src", "t"} frames through (it used to require strings)."""
+    import asyncio
+    import server
+    jj, seen = _stub_judge(CLAIMS)
+    monkeypatch.setattr(server, "judge_json", jj)
+    frames = [{"src": "frame_12.jpg", "t": 12.0}, "frame_13.jpg"]
+    out = asyncio.run(server.mcp.call_tool("evaluate_case", {
+        "input": "Where is my backpack?", "actual_output": DESC,
+        "metrics": ["visual_faithfulness"], "images": frames, "save": False}))
+    text = out[0][0].text if isinstance(out, tuple) else out[0].text
+    assert '"visual_faithfulness"' in text
+    assert seen["images"] == frames
